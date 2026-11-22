@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#03020a" />
+  <title>S</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='44' fill='none' stroke='%23a855f7' stroke-width='10'/><circle cx='50' cy='50' r='30' fill='black'/></svg>" />
+  <style>/*__KATEX__*/</style>
+  <style>/*__CSS__*/</style>
+</head>
+<body>
+  <div id="intro" role="presentation">
+    <canvas id="intro-canvas"></canvas>
+    <div class="intro-bh">
+      <div class="blackhole">
+        <div class="glow"></div>
+        <div class="disk back"></div>
+        <div class="horizon"></div>
+        <div class="disk front"></div>
+        <div class="lens"></div>
+      </div>
+    </div>
+    <div class="flash"></div>
+    <div class="ring r1"></div>
+    <div class="ring r2"></div>
+    <div class="intro-title">
+      <div class="t1">PROJECT <span>S</span></div>
+      <div class="t2">by Shivanshu Sharma</div>
+      <div class="t3">Your personal AI · Har subject, har sawaal</div>
+    </div>
+    <div class="skip">tap to skip</div>
+  </div>
+
+  <canvas id="stars" aria-hidden="true"></canvas>
+  <div class="nebula" aria-hidden="true"></div>
+
+  <aside id="sidebar">
+    <div class="side-head">
+      <div class="brand"><span class="logo" aria-hidden="true"></span><span id="brand-name">S</span></div>
+      <button id="close-side" class="icon-btn only-mobile" aria-label="Close menu">✕</button>
+    </div>
+    <div class="side-actions">
+      <button id="new-chat" class="new-chat">＋ New chat</button>
+      <button id="open-settings" class="new-chat gear" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+    <nav id="chat-list" aria-label="Conversations"></nav>
+    <div class="side-foot" id="model-info"></div>
+  </aside>
+  <div id="scrim" class="only-mobile"></div>
+
+  <main>
+    <header class="top">
+      <button id="open-side" class="icon-btn only-mobile" aria-label="Open menu">☰</button>
+      <h1 id="chat-title">New chat</h1>
+    </header>
+
+    <section id="messages" aria-live="polite">
+      <div id="welcome" class="welcome">
+        <div class="bh-scene" aria-hidden="true">
+          <div class="blackhole">
+            <div class="glow"></div>
+            <div class="disk back"></div>
+            <div class="horizon"></div>
+            <div class="disk front"></div>
+            <div class="lens"></div>
+          </div>
+        </div>
+        <h2>Hi, I'm S. Kuch bhi poocho.</h2>
+        <p class="sub">Maths, science, history, coding… ya photo bhejo, main solve kar dunga.</p>
+        <div class="suggestions">
+          <button data-q="Solve step by step: 2x² − 5x + 3 = 0">🧮 <b>Maths</b><span>Solve 2x² − 5x + 3 = 0</span></button>
+          <button data-q="Newton ke teeno laws simple Hinglish mein examples ke saath samjhao">⚛️ <b>Physics</b><span>Newton's laws in Hinglish</span></button>
+          <button data-q="Explain photosynthesis simply, with the equation">🌱 <b>Biology</b><span>How photosynthesis works</span></button>
+          <button data-q="French Revolution ke main causes kya the? Short notes banao">🏛️ <b>History</b><span>French Revolution notes</span></button>
+        </div>
+      </div>
+    </section>
+
+    <div id="tray" hidden></div>
+    <form id="composer">
+      <div class="plus-wrap">
+        <button id="plus" type="button" class="round" aria-label="Attach">＋</button>
+        <div id="plus-menu" hidden>
+          <button type="button" id="pick-camera">📷 Camera</button>
+          <button type="button" id="pick-photos">🖼️ Photos</button>
+          <button type="button" id="pick-file">📎 File (PDF, text)</button>
+        </div>
+      </div>
+      <textarea id="input" rows="1" placeholder="Message S…" autocomplete="off"></textarea>
+      <button id="mic" type="button" class="round" aria-label="Voice typing">🎤</button>
+      <button id="send" type="submit" aria-label="Send">➤</button>
+      <button id="stop" type="button" aria-label="Stop" hidden>■</button>
+      <input id="file-camera" type="file" accept="image/*" capture="environment" hidden />
+      <input id="file-photos" type="file" accept="image/*" multiple hidden />
+      <input id="file-any" type="file" accept="image/*,application/pdf,text/*,.txt,.md,.csv,.json,.py,.js,.html,.css" multiple hidden />
+    </form>
+    <p class="hint">Enter to send · Shift+Enter for a new line · 🎤 to talk · ＋ for photos & files</p>
+  </main>
+
+  <dialog id="settings">
+    <form id="settings-form" method="dialog">
+      <h2><span class="logo" aria-hidden="true"></span>Settings</h2>
+      <p id="set-note" class="note" hidden></p>
+
+      <label for="set-provider">Brain</label>
+      <select id="set-provider">
+        <option value="gemini">Google Gemini (free)</option>
+        <option value="openrouter">OpenRouter (free backup)</option>
+        <option value="claude">Claude (paid, smartest)</option>
+      </select>
+
+      <div id="gemini-fields">
+        <label for="set-gkey">Gemini API key</label>
+        <div class="key-row">
+          <input id="set-gkey" type="password" placeholder="AIza..." autocomplete="off" spellcheck="false" />
+          <button type="button" class="toggle-key">Show</button>
+        </div>
+        <p class="small">Free key: open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>, sign in with Google, tap <b>Create API key</b>, copy it and paste it here.</p>
+        <label for="set-gmodel">Gemini model</label>
+        <select id="set-gmodel">
+          <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (about 500 free messages/day)</option>
+          <option value="gemini-3.8-flash">Gemini 3.8 Flash (smarter, only about 20 free/day)</option>
+        </select>
+        <p class="small">If one model's free limit runs out, S automatically tries the other free Gemini models.</p>
+      </div>
+
+      <div id="openrouter-fields" hidden>
+        <label for="set-okey">OpenRouter API key</label>
+        <div class="key-row">
+          <input id="set-okey" type="password" placeholder="sk-or-..." autocomplete="off" spellcheck="false" />
+          <button type="button" class="toggle-key">Show</button>
+        </div>
+        <p class="small">Free key: open <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>, sign in with Google, tap <b>Create API Key</b>, copy it and paste it here. S uses OpenRouter's free models automatically. For photos and PDFs, Gemini works best.</p>
+      </div>
+
+      <div id="claude-fields" hidden>
+        <label for="set-key">Claude API key</label>
+        <div class="key-row">
+          <input id="set-key" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" />
+          <button type="button" class="toggle-key">Show</button>
+        </div>
+        <p class="small">Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> (needs credit under Billing).</p>
+        <label for="set-model">Claude model</label>
+        <select id="set-model">
+          <option value="claude-opus-5-5">Opus 5.5 (smartest)</option>
+          <option value="claude-sonnet-5-5">Sonnet 5.5 (fast, about half the price)</option>
+          <option value="claude-haiku-5-5">Haiku 5.5 (fastest, cheapest)</option>
+        </select>
+        <label for="set-effort">Thinking effort</label>
+        <select id="set-effort">
+          <option value="low">Low (quick answers)</option>
+          <option value="medium">Medium (balanced)</option>
+          <option value="high">High (harder problems)</option>
+          <option value="max">Max (deepest, slowest)</option>
+        </select>
+        <label class="check"><input id="set-web" type="checkbox" /> Let S search the web</label>
+      </div>
+      <p class="small">Keys are saved only in this browser on this device.</p>
+
+      <label for="set-voice">Mic language</label>
+      <select id="set-voice">
+        <option value="en-IN">English / Hinglish (India)</option>
+        <option value="hi-IN">हिंदी (Hindi)</option>
+        <option value="en-US">English (US)</option>
+      </select>
+
+      <label for="set-personality">Personality (optional)</label>
+      <textarea id="set-personality" placeholder="e.g. Talk to me like a friend, in Hinglish. I'm in class 12, PCM."></textarea>
+
+      <div class="dialog-actions">
+        <button type="button" id="clear-all" class="btn danger">Delete all chats</button>
+        <div class="right">
+          <button value="cancel" class="btn" formnovalidate>Cancel</button>
+          <button value="save" class="btn primary">Save</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+  <div id="toast" hidden></div>
+
+  <script>/*__JS__*/</script>
+</body>
+</html>
