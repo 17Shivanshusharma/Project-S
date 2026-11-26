@@ -1,8 +1,18 @@
-# 🌌 Project S
+# 🌌 Project S – Free Hinglish AI for Students
 
-**A personal AI assistant in a single HTML file, by Shivanshu Sharma.**
+**A personal AI tutor in a single HTML file, by Shivanshu Sharma.**
+
+### 👉 Try it now: **[17shivanshusharma.github.io/Project-S](https://17shivanshusharma.github.io/Project-S/)**
+
+> **100% free, sirf Google account chahiye.** Your key and chats stay in your own browser. We don't store any data.
 
 S is a space-themed AI chat app that runs entirely in your browser. There is nothing to install and no server. Open the file, paste your own free API key, and start asking questions.
+
+## 🎬 Watch the video
+
+[![Project S explainer video: click to watch](media/preview.gif)](https://17shivanshusharma.github.io/Project-S/media/project-s-explainer.mp4)
+
+**[▶ Watch the full video (74 seconds)](https://17shivanshusharma.github.io/Project-S/media/project-s-explainer.mp4)**: what S can do, how to make your free key, and why your data stays with you.
 
 ![S intro](screenshots/intro.png)
 
@@ -45,7 +55,24 @@ Switch brains anytime from ☰ → ⚙ Settings.
 
 > **Note:** free keys have daily limits set by the provider. For example, Gemini 3.5 Flash-Lite allows roughly 500 messages a day. If one Gemini model hits its limit, S automatically tries the other free Gemini models.
 
-## 🔒 Security
+## 🔑 Free key kaise banaye (1 minute)
+
+1. Open [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+2. Sign in with your Google account (the same Gmail that's on your phone).
+3. Tap **Create API key**. If it asks for a project, pick the first one.
+4. Copy the key (it starts with `AIza`) and paste it into S. Done!
+
+<img src="screenshots/guide.png" alt="Free key guide in S" width="300" />
+
+S shows this same guide on the first screen. You can open it again anytime from ☰ → 📖 Free key guide.
+
+## 🔒 Privacy
+
+- **We don't store any data.** S has no server. Your chats and your key are saved only in your own browser.
+- When you ask something, your message goes straight to the AI you picked (Google Gemini by default) so it can answer. On the free Gemini tier, Google may use messages to improve its services, so don't send very personal information.
+- To delete your chats: ☰ → ⚙ Settings → **Delete all chats**.
+
+## 🛡️ Security
 
 - **No API key is included in this project.** Every user adds their own key in Settings.
 - Your key is saved only in your browser's local storage on your device.
@@ -86,6 +113,7 @@ npm run build      # writes out/S.html
 - `src/space.js`: the 3D starfield
 - `src/intro.js`: the black hole intro animation
 - `src/style.css` and `src/template.html`: the look and the layout
+- `video/`: the explainer video (`video.html` is the animation, `render.cjs` turns it into frames for ffmpeg)
 - `build.cjs`: bundles everything, including the KaTeX maths fonts, into one HTML file
 
 Built with [marked](https://github.com/markedjs/marked), [DOMPurify](https://github.com/cure53/DOMPurify), [KaTeX](https://katex.org) and the [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-typescript).

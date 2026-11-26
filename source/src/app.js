@@ -1132,6 +1132,24 @@ document.querySelectorAll(".toggle-key").forEach(
       b.textContent = k.type === "password" ? "Show" : "Hide";
     }),
 );
+// Free key guide + privacy note
+const guide = $("#guide");
+function openGuide(scrollToPrivacy = false) {
+  document.body.classList.remove("side-open");
+  if (dialog.open) dialog.close();
+  if (!guide.open) guide.showModal();
+  if (scrollToPrivacy) $("#privacy").scrollIntoView({ block: "start" });
+  else guide.scrollTop = 0;
+}
+document.querySelectorAll(".open-guide").forEach((b) => (b.onclick = () => openGuide()));
+document.querySelectorAll(".open-privacy").forEach((b) => (b.onclick = () => openGuide(true)));
+$(".guide-x").onclick = () => guide.close();
+$("#guide-done").onclick = () => {
+  guide.close();
+  settings.provider = activeKey() ? settings.provider : "gemini";
+  openSettings("Copy ki hui key neeche paste karo aur Save dabao.");
+};
+
 $("#clear-all").onclick = async () => {
   if (!confirm("Delete all chats from this device?")) return;
   await db.clear();
@@ -1194,5 +1212,5 @@ migrateOldChats()
   .catch(console.error)
   .finally(() => openChat(null));
 playIntro().then(() => {
-  if (!activeKey()) openSettings(`Welcome! To wake ${NAME} up, paste your free Gemini API key below. You only need to do this once.`);
+  if (!activeKey()) openGuide();
 });

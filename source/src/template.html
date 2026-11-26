@@ -5,7 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <meta name="color-scheme" content="dark" />
   <meta name="theme-color" content="#03020a" />
-  <title>S</title>
+  <title>Project S – Free Hinglish AI for Students</title>
+  <meta name="description" content="Project S by Shivanshu Sharma: a free AI tutor for students that replies in Hinglish. Maths, physics, chemistry, biology, coding, JEE and NEET help, photo questions and voice typing. 100% free with a Google account. Your key and chats stay in your own browser." />
+  <meta name="keywords" content="free AI for students, Hinglish AI, AI tutor, maths solver, JEE, NEET, Project S, Shivanshu Sharma" />
+  <meta name="author" content="Shivanshu Sharma" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Project S – Free Hinglish AI for Students" />
+  <meta property="og:description" content="Free AI tutor that talks in Hinglish. Har subject, har sawaal. 100% free, sirf Google account chahiye." />
+  <meta property="og:url" content="https://17shivanshusharma.github.io/Project-S/" />
+  <meta property="og:image" content="https://17shivanshusharma.github.io/Project-S/screenshots/home.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="canonical" href="https://17shivanshusharma.github.io/Project-S/" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='44' fill='none' stroke='%23a855f7' stroke-width='10'/><circle cx='50' cy='50' r='30' fill='black'/></svg>" />
   <style>/*__KATEX__*/</style>
   <style>/*__CSS__*/</style>
@@ -46,7 +56,7 @@
       <button id="open-settings" class="new-chat gear" title="Settings" aria-label="Settings">⚙</button>
     </div>
     <nav id="chat-list" aria-label="Conversations"></nav>
-    <div class="side-foot" id="model-info"></div>
+    <div class="side-foot"><span id="model-info"></span><br /><button type="button" class="link-btn open-guide">📖 Free key guide</button> · <button type="button" class="link-btn open-privacy">🔒 Privacy</button></div>
   </aside>
   <div id="scrim" class="only-mobile"></div>
 
@@ -117,7 +127,7 @@
           <input id="set-gkey" type="password" placeholder="AIza..." autocomplete="off" spellcheck="false" />
           <button type="button" class="toggle-key">Show</button>
         </div>
-        <p class="small">Free key: open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>, sign in with Google, tap <b>Create API key</b>, copy it and paste it here.</p>
+        <p class="small">Free key: open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>, sign in with Google, tap <b>Create API key</b>, copy it and paste it here. <button type="button" class="link-btn open-guide">📖 Free key kaise banaye? (1-minute guide)</button></p>
         <label for="set-gmodel">Gemini model</label>
         <select id="set-gmodel">
           <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (about 500 free messages/day)</option>
@@ -157,7 +167,7 @@
         </select>
         <label class="check"><input id="set-web" type="checkbox" /> Let S search the web</label>
       </div>
-      <p class="small">Keys are saved only in this browser on this device.</p>
+      <p class="small">🔒 Keys are saved only in this browser on this device. They never come to us. <button type="button" class="link-btn open-privacy">Privacy</button></p>
 
       <label class="check"><input id="set-sympy" type="checkbox" /> 🧮 Maths engine (SymPy)</label>
       <p class="small">S solves hard maths exactly with SymPy, running inside your browser. It downloads once (about 15 MB) the first time it's needed. Works with Gemini and Claude.</p>
@@ -180,6 +190,63 @@
         </div>
       </div>
     </form>
+  </dialog>
+  <dialog id="guide" aria-labelledby="guide-title">
+    <div class="guide">
+      <button type="button" class="icon-btn guide-x" aria-label="Close">✕</button>
+      <p class="guide-kicker"><span class="logo" aria-hidden="true"></span> Project S</p>
+      <h2 id="guide-title" class="guide-big">100% free, sirf Google account chahiye.</h2>
+      <p class="guide-sub">S ko chalane ke liye ek free Gemini key chahiye. Banane mein bas 1 minute lagta hai:</p>
+
+      <ol class="steps">
+        <li>
+          <div class="shot" aria-hidden="true">
+            <div class="shot-bar"><span class="lock">🔒</span> aistudio.google.com/apikey</div>
+            <div class="shot-body"><div class="shot-title">Google AI Studio</div><div class="shot-line"></div><div class="shot-line short"></div></div>
+          </div>
+          <div><b>1. Ye link kholo</b><br /><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></div>
+        </li>
+        <li>
+          <div class="shot" aria-hidden="true">
+            <div class="shot-bar"><span class="lock">🔒</span> accounts.google.com</div>
+            <div class="shot-body"><div class="shot-title">Sign in</div><div class="shot-field">you@gmail.com</div><div class="shot-btn">Next</div></div>
+          </div>
+          <div><b>2. Google account se sign in karo</b><br />Wahi Gmail jo phone mein hai. Terms aayein to accept karo.</div>
+        </li>
+        <li>
+          <div class="shot" aria-hidden="true">
+            <div class="shot-bar"><span class="lock">🔒</span> aistudio.google.com/apikey</div>
+            <div class="shot-body"><div class="shot-title">API keys</div><div class="shot-btn glow">＋ Create API key</div></div>
+          </div>
+          <div><b>3. "Create API key" dabao</b><br />Project poochhe to jo pehla dikhe wahi chuno.</div>
+        </li>
+        <li>
+          <div class="shot" aria-hidden="true">
+            <div class="shot-bar"><span class="lock">🔒</span> aistudio.google.com/apikey</div>
+            <div class="shot-body"><div class="shot-title">Your API key</div><div class="shot-field mono">AIzaSy•••••••••••••</div><div class="shot-btn">Copy</div></div>
+          </div>
+          <div><b>4. Key copy karo aur S mein paste karo</b><br />Key <code>AIza</code> se shuru hoti hai.</div>
+        </li>
+      </ol>
+      <p class="small shot-note">Pictures sirf samjhane ke liye hain; Google ka asli page thoda alag dikh sakta hai.</p>
+
+      <div class="trust">
+        <p>🔒 <b>Tumhari key sirf tumhare browser mein save hoti hai.</b> Ye hamare paas nahi aati, aur kisi ko dikhti nahi.</p>
+        <p>🙈 <b>Key kisi ko mat dena</b> aur GitHub pe mat daalna. Galti se leak ho jaye to aistudio se delete karke nayi bana lo.</p>
+      </div>
+
+      <div id="privacy" class="privacy">
+        <h3>Privacy</h3>
+        <p><b>Hum koi data store nahi karte.</b> S ka koi server nahi hai. Tumhari chats aur key sirf tumhare phone ke browser mein rehti hain.</p>
+        <p>Jab tum sawaal poochte ho, wo seedha Google Gemini (ya jo brain tumne chuna hai) ko jaata hai taaki jawab mil sake. Free Gemini key par Google apne niyam ke hisaab se messages ko service behtar karne ke liye dekh sakta hai, isliye bahut personal cheezein mat bhejna.</p>
+        <p>Chats delete karni ho to ☰ → ⚙ Settings → <b>Delete all chats</b>.</p>
+      </div>
+
+      <div class="guide-actions">
+        <a class="btn" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Free key banao ↗</a>
+        <button type="button" class="btn primary" id="guide-done">Key mil gayi, paste karo →</button>
+      </div>
+    </div>
   </dialog>
   <div id="toast" hidden></div>
 
