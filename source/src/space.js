@@ -1,5 +1,7 @@
 // A 3D starfield: stars fly slowly toward you, with a gentle tilt that
 // follows your finger, mouse or phone movement (parallax).
+// Kept light so typing stays smooth on phones: it draws at most 30 frames a second,
+// pauses while you type, and updates the tilt once per frame instead of on every sensor event.
 export function startStarfield(canvas) {
   if (!canvas?.getContext) return;
   const ctx = canvas.getContext("2d");
@@ -7,15 +9,19 @@ export function startStarfield(canvas) {
   const COLORS = ["#ffffff", "#e9d5ff", "#c4b5fd", "#a5b4fc", "#f5d0fe", "#bae6fd"];
   let w = 0, h = 0, dpr = 1, stars = [];
   let tx = 0, ty = 0, px = 0, py = 0; // target and current tilt
+  let cssX = 0, cssY = 0; // tilt last written to CSS
+  let pausedUntil = 0; // typing pauses the animation
+  let running = false;
+  const small = matchMedia("(pointer: coarse)").matches || innerWidth < 700;
 
   function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    dpr = Math.min(window.devicePixelRatio || 1, small ? 1.5 : 2);
     w = canvas.clientWidth;
     h = canvas.clientHeight;
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const count = Math.round(Math.min(420, (w * h) / 2600));
+    const count = Math.round(Math.min(small ? 200 : 420, (w * h) / (small ? 2400 : 2600)));
     stars = Array.from({ length: count }, () => newStar(true));
   }
   function newStar(anywhere) {
@@ -29,11 +35,34 @@ export function startStarfield(canvas) {
   }
 
   let last = performance.now();
+  function loop(now) {
+    running = false;
+    if (document.hidden) return;
+    if (now < pausedUntil) {
+      // Typing: stay still, then carry on smoothly.
+      setTimeout(() => schedule(), pausedUntil - now);
+      return;
+    }
+    if (now - last >= 32) frame(now); // ~30 frames a second is plenty for slow stars
+    schedule();
+  }
+  function schedule() {
+    if (running || document.hidden) return;
+    running = true;
+    requestAnimationFrame(loop);
+  }
   function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
+    const dt = Math.min(0.08, (now - last) / 1000);
     last = now;
-    px += (tx - px) * 0.04;
-    py += (ty - py) * 0.04;
+    px += (tx - px) * 0.08;
+    py += (ty - py) * 0.08;
+    // Move the nebula and the 3D black hole with the tilt, but only when it changed noticeably.
+    if (Math.abs(px - cssX) > 0.01 || Math.abs(py - cssY) > 0.01) {
+      cssX = px;
+      cssY = py;
+      document.documentElement.style.setProperty("--tilt-x", px.toFixed(2));
+      document.documentElement.style.setProperty("--tilt-y", py.toFixed(2));
+    }
     ctx.clearRect(0, 0, w, h);
     const cx = w / 2 + px * 40;
     const cy = h * 0.42 + py * 40;
@@ -63,13 +92,10 @@ export function startStarfield(canvas) {
       }
     }
     ctx.globalAlpha = 1;
-    if (!document.hidden) requestAnimationFrame(frame);
   }
   function tilt(x, y) {
     tx = Math.max(-1, Math.min(1, x));
     ty = Math.max(-1, Math.min(1, y));
-    document.documentElement.style.setProperty("--tilt-x", tx.toFixed(3));
-    document.documentElement.style.setProperty("--tilt-y", ty.toFixed(3));
   }
   addEventListener("pointermove", (e) => tilt((e.clientX / innerWidth - 0.5) * 2, (e.clientY / innerHeight - 0.5) * 2), { passive: true });
   addEventListener("deviceorientation", (e) => {
@@ -80,9 +106,15 @@ export function startStarfield(canvas) {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       last = performance.now();
-      requestAnimationFrame(frame);
+      schedule();
     }
   });
   resize();
-  requestAnimationFrame(frame);
+  schedule();
+  // Call this on every keystroke: the stars rest while you type.
+  return {
+    pause(ms = 900) {
+      pausedUntil = performance.now() + ms;
+    },
+  };
 }

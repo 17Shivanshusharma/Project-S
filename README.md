@@ -11,6 +11,7 @@ S is a space-themed AI chat app that runs entirely in your browser. There is not
 - **One file:** the whole app is `index.html` (about 1 MB). Open it on a phone or computer.
 - **Free to use:** works with a free Google Gemini key. OpenRouter (free) and Claude (paid) are also supported.
 - **Every subject:** maths, physics, chemistry, biology, history, English, coding, plus JEE and NEET prep. Maths is solved step by step, and formulas are rendered properly.
+- **Real maths engine (SymPy):** for hard maths (equations, integrals, limits, differential equations, matrices), S runs real Python with [SymPy](https://www.sympy.org) inside your browser and shows the calculation in a small fold-out box. It downloads once (about 15 MB) the first time, using [Pyodide](https://pyodide.org). Works with Gemini and Claude; you can turn it off in Settings.
 - **Photos and files:** the ＋ button opens the camera, photos, PDFs or text files. Take a photo of a question and S solves it.
 - **Voice typing:** tap 🎤 and speak, in English, Hinglish or Hindi.
 - **Hinglish support:** S replies in the language you write in.
@@ -81,6 +82,7 @@ npm run build      # writes out/S.html
 ```
 
 - `src/app.js`: chat logic, the providers (Gemini, OpenRouter, Claude), attachments, mic and storage
+- `src/sympy.js`: the SymPy maths engine (Pyodide in a Web Worker)
 - `src/space.js`: the 3D starfield
 - `src/intro.js`: the black hole intro animation
 - `src/style.css` and `src/template.html`: the look and the layout

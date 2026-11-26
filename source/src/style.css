@@ -40,9 +40,8 @@ body {
     radial-gradient(45% 40% at 40% 50%, rgba(76, 29, 149, 0.16), transparent 75%);
   transform: translate(calc(var(--tilt-x) * -14px), calc(var(--tilt-y) * -14px));
   transition: transform 0.6s ease-out;
-  animation: nebula-drift 40s ease-in-out infinite alternate;
+  will-change: transform;
 }
-@keyframes nebula-drift { to { filter: hue-rotate(25deg) brightness(1.15); } }
 
 button { font: inherit; color: inherit; cursor: pointer; }
 ::selection { background: rgba(168, 85, 247, 0.45); }
@@ -322,6 +321,25 @@ dialog textarea { resize: vertical; min-height: 70px; }
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
+/* Smooth typing: while you type, the background animations rest (S adds .typing to <body>). */
+body.typing .blackhole *, body.typing .logo { animation-play-state: paused; }
+
+/* Phones: blurring the glass panels over the moving stars costs a lot on every frame,
+   which made typing feel laggy. On touch screens the panels use solid tinted glass instead. */
+@media (pointer: coarse), (max-width: 760px) {
+  #sidebar, .top, #composer, .msg.assistant .bubble, .suggestions button, #plus-menu {
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  #sidebar { background: rgba(12, 7, 28, 0.94); }
+  .top { background: rgba(6, 4, 16, 0.86); }
+  #composer { background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)), rgba(14, 8, 30, 0.95); }
+  .msg.assistant .bubble { background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)), rgba(14, 8, 30, 0.82); }
+  .suggestions button { background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.01)), rgba(18, 10, 38, 0.85); }
+  #plus-menu { background: rgba(14, 8, 30, 0.97); }
+  .msg.assistant .bubble, .msg.user .bubble, #composer { box-shadow: none; }
+  .blackhole .disk, .blackhole .lens { filter: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
@@ -418,3 +436,12 @@ dialog textarea { resize: vertical; min-height: 70px; }
 #intro.tagline .t3 { opacity: 1; }
 #intro.title .t1 { animation: title-glow 3s ease-in-out 2s infinite alternate; }
 @keyframes title-glow { to { text-shadow: 0 0 28px rgba(232, 121, 249, 1), 0 0 90px rgba(124, 58, 237, 1); } }
+
+/* SymPy calculation box inside a reply */
+details.calc {
+  margin: 10px 0; border: 1px solid var(--border); border-radius: 12px;
+  background: rgba(103, 232, 249, 0.05); padding: 6px 12px;
+}
+details.calc summary { cursor: pointer; color: var(--cyan); font-size: 14px; font-weight: 600; list-style-position: inside; }
+details.calc[open] summary { margin-bottom: 6px; }
+details.calc pre { margin: 6px 0; }

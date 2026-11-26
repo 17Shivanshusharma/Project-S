@@ -6,6 +6,7 @@ import DOMPurify from "dompurify";
 import katex from "katex";
 import { startStarfield } from "./space.js";
 import { playIntro } from "./intro.js";
+import { runSympy, sympyLoaded, SYMPY_TOOL } from "./sympy.js";
 
 const NAME = "S";
 const $ = (sel) => document.querySelector(sel);
@@ -48,6 +49,7 @@ const DEFAULT_SETTINGS = {
   webSearch: true,
   voiceLang: "en-IN",
   personality: "",
+  sympy: true,
 };
 const saved = prefs.get("settings", {});
 if (saved.apiKey && !saved.claudeKey) saved.claudeKey = saved.apiKey; // from the first version
@@ -63,9 +65,11 @@ const activeModel = () =>
   ({ gemini: settings.geminiModel, openrouter: "OpenRouter free models", claude: settings.model })[settings.provider];
 // Web search costs extra on Gemini, so S only searches when Claude is the brain.
 const searchOn = () => settings.provider === "claude" && settings.webSearch;
+// The SymPy maths engine is a tool the AI calls. OpenRouter's free models don't all support tools.
+const sympyOn = () => settings.sympy && settings.provider !== "openrouter";
 
 function systemPrompt() {
-  return `You are ${NAME}, a friendly, brilliant personal AI assistant and tutor.
+  return `You are ${NAME}, a friendly, brilliant personal AI assistant and tutor, created by Shivanshu Sharma.
 You can help with anything: every school and college subject (maths, physics, chemistry, biology, history, geography, civics, economics, English, Hindi, computer science, accounts), competitive exams (JEE, NEET, boards), coding, writing, general knowledge, advice and brainstorming.
 
 How to answer:
@@ -77,6 +81,8 @@ How to answer:
 - If the user sends a photo of a question, a page or a diagram, read it carefully and solve or explain what is in it.
 - Use Markdown (headings, bullet lists, tables, code blocks with a language tag) when it makes the answer easier to read.
 - If you're not sure about something, say so instead of guessing.
+- About yourself: you were made by Shivanshu Sharma. If anyone asks who made you, who created you or who your owner is, say Shivanshu Sharma made you. If anyone asks "who is Shivanshu Sharma?", answer that Shivanshu Sharma is the one who made you (in the user's language, e.g. "Shivanshu Sharma ne mujhe banaya hai"). If someone asks which AI model powers you, say S is built by Shivanshu Sharma and currently runs on ${({ gemini: "Google Gemini", openrouter: "free models from OpenRouter", claude: "Anthropic's Claude" })[settings.provider]}.
+${sympyOn() ? `- You have a maths engine: the run_sympy tool runs Python with SymPy and returns exact results. Use it for any calculation that isn't trivial (equations and systems, integrals, derivatives, limits, series, differential equations, matrices, simplifying, factorising, big or precise arithmetic) and to double-check final answers. You can call it several times. If it returns an error, fix the code and try again. After using it, still explain the method step by step in normal maths (LaTeX) the way a teacher would, and don't paste the code into your answer: the user can already see it.` : ""}
 ${searchOn() ? "- You can search the web. Use it for recent events, prices, or facts you are unsure about, and mention your sources." : "- You cannot browse the web, so for very recent news say your information may be out of date."}
 ${settings.personality ? "\nExtra instructions from your owner:\n" + settings.personality : ""}`;
 }
@@ -242,6 +248,7 @@ const stopBtn = $("#stop");
 let currentChat = null;
 let controller = null;
 let pendingFiles = []; // attachments waiting to be sent
+let stars = null; // the background starfield
 
 function toast(text) {
   const t = $("#toast");
@@ -687,6 +694,19 @@ async function send(text) {
 }
 
 // =====================================================================
+// Maths engine (SymPy): run the AI's code and show it in the reply as a small fold-out box
+// =====================================================================
+const fence = (t) => String(t).replace(/```/g, "``\u200b`");
+async function useSympy(code, onText, onStatus, signal) {
+  onStatus(sympyLoaded() ? "🧮 Calculating with SymPy…" : "🧮 Starting the maths engine (first time: downloading about 15 MB)…");
+  const out = await runSympy(String(code || ""), signal);
+  if (signal.aborted) throw new DOMException("Stopped", "AbortError");
+  onText(`\n\n<details class="calc"><summary>🧮 SymPy calculation</summary>\n\n\`\`\`python\n${fence(code)}\n\`\`\`\n\n\`\`\`text\n${fence(out)}\n\`\`\`\n\n</details>\n\n`);
+  onStatus("Thinking…");
+  return out;
+}
+
+// =====================================================================
 // Claude
 // =====================================================================
 function friendlyError(err) {
@@ -727,18 +747,28 @@ function claudeMessages(chat) {
 
 async function askClaude(chat, onText, onStatus, signal) {
   const client = new Anthropic({ apiKey: settings.claudeKey, dangerouslyAllowBrowser: true });
-  const tools = searchOn() ? [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }] : undefined;
-  // Web search can pause a long turn ("pause_turn"); continue it up to a few times.
-  for (let round = 0; round < 5; round++) {
+  const tools = [];
+  if (searchOn()) tools.push({ type: "web_search_20260209", name: "web_search", max_uses: 5 });
+  if (sympyOn()) tools.push({ name: SYMPY_TOOL.name, description: SYMPY_TOOL.description, input_schema: SYMPY_TOOL.parameters });
+  const messages = claudeMessages(chat);
+  const content = []; // everything Claude wrote this turn
+  let shown = ""; // the reply as the user sees it (incl. SymPy boxes)
+  let usedSympy = false;
+  const show = (t) => {
+    shown += t;
+    onText(t);
+  };
+  // Continue the turn after SymPy results, or when web search pauses it ("pause_turn").
+  for (let round = 0; round < 10; round++) {
     const stream = client.beta.messages.stream(
       {
         model: settings.model,
         max_tokens: 64000,
         system: systemPrompt(),
-        messages: claudeMessages(chat),
+        messages,
         thinking: { type: "adaptive" },
         output_config: { effort: settings.effort },
-        ...(tools ? { tools } : {}),
+        ...(tools.length ? { tools } : {}),
         // If a safety check declines a request, the API retries it on a fallback model.
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
@@ -750,20 +780,38 @@ async function askClaude(chat, onText, onStatus, signal) {
         const t = event.content_block.type;
         if (t === "thinking") onStatus("Thinking…");
         else if (t === "server_tool_use") onStatus("Searching the web…");
+        else if (t === "tool_use") onStatus("🧮 Writing a SymPy calculation…");
         else if (t === "text") onStatus("");
       } else if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-        onText(event.delta.text);
+        show(event.delta.text);
       }
     });
     const message = await stream.finalMessage();
-    // Keep the full reply (incl. thinking blocks) so the conversation stays consistent.
-    chat.messages.push({ role: "assistant", content: message.content });
-    await saveChat(chat);
-    if (message.stop_reason === "pause_turn") continue;
-    if (message.stop_reason === "refusal") onText("\n\n_I can't help with that one._");
-    if (message.stop_reason === "max_tokens") onText("\n\n_(Reply cut off at the length limit.)_");
-    return;
+    content.push(...message.content);
+    if (message.stop_reason === "tool_use") {
+      messages.push({ role: "assistant", content: message.content });
+      const results = [];
+      for (const block of message.content) {
+        if (block.type !== "tool_use") continue;
+        const out = block.name === SYMPY_TOOL.name ? await useSympy(block.input?.code, show, onStatus, signal) : "Unknown tool.";
+        results.push({ type: "tool_result", tool_use_id: block.id, content: out });
+      }
+      messages.push({ role: "user", content: results });
+      usedSympy = true;
+      continue;
+    }
+    if (message.stop_reason === "pause_turn") {
+      messages.push({ role: "assistant", content: message.content });
+      continue;
+    }
+    if (message.stop_reason === "refusal") show("\n\n_I can't help with that one._");
+    if (message.stop_reason === "max_tokens") show("\n\n_(Reply cut off at the length limit.)_");
+    break;
   }
+  // Keep the full reply (incl. thinking) so the conversation stays consistent. After SymPy,
+  // save it as text instead: the tool calls only make sense together with their results.
+  chat.messages.push({ role: "assistant", content: usedSympy ? shown || "…" : content });
+  await saveChat(chat);
 }
 
 // =====================================================================
@@ -845,52 +893,83 @@ function geminiContents(chat) {
 }
 
 async function askGemini(chat, onText, onStatus, signal) {
-  const body = JSON.stringify({
-    systemInstruction: { parts: [{ text: systemPrompt() }] },
-    contents: geminiContents(chat),
-    generationConfig: { maxOutputTokens: 32768 },
-  });
+  const contents = geminiContents(chat);
+  const tools = sympyOn()
+    ? [{ functionDeclarations: [{ name: SYMPY_TOOL.name, description: SYMPY_TOOL.description, parameters: SYMPY_TOOL.parameters }] }]
+    : undefined;
+  const request = (model) =>
+    fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
+      method: "POST",
+      signal,
+      headers: { "Content-Type": "application/json", "x-goog-api-key": settings.geminiKey },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt() }] },
+        contents,
+        ...(tools ? { tools } : {}),
+        generationConfig: { maxOutputTokens: 32768 },
+      }),
+    });
 
   // Try the chosen model first; if its free quota is used up, try the other free models.
   const models = [settings.geminiModel, ...GEMINI_FREE.filter((m) => m !== settings.geminiModel)];
-  let res, firstErr;
-  for (const model of models) {
-    try {
-      res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
-        { method: "POST", signal, body, headers: { "Content-Type": "application/json", "x-goog-api-key": settings.geminiKey } },
-      );
-    } catch (err) {
-      if (signal.aborted) throw err;
-      throw new FreeError("Couldn't reach Gemini. Check your internet connection.");
-    }
-    if (res.ok) {
-      if (model !== settings.geminiModel) onStatus(`Using ${model} (free limit on ${settings.geminiModel} is used up)…`);
-      break;
-    }
-    const err = await geminiError(res);
-    firstErr ??= err;
-    if (!(res.status === 429 || res.status === 404)) throw err; // only quota / missing model is worth retrying
-    res = null;
-  }
-  if (!res) throw firstErr;
-
   let full = "";
   let finish = "";
   let blocked = "";
-  await readSSE(res, (chunk) => {
-    if (chunk.promptFeedback?.blockReason) blocked = chunk.promptFeedback.blockReason;
-    const cand = chunk.candidates?.[0];
-    if (!cand) return;
-    for (const part of cand.content?.parts || []) {
-      if (part.text && !part.thought) {
-        onStatus("");
-        full += part.text;
-        onText(part.text);
+  let model = null;
+  for (let round = 0; round < 10; round++) {
+    let res, firstErr;
+    for (const m of model ? [model] : models) {
+      try {
+        res = await request(m);
+      } catch (err) {
+        if (signal.aborted) throw err;
+        throw new FreeError("Couldn't reach Gemini. Check your internet connection.");
       }
+      if (res.ok) {
+        if (!model && m !== settings.geminiModel) onStatus(`Using ${m} (free limit on ${settings.geminiModel} is used up)…`);
+        model = m;
+        break;
+      }
+      const err = await geminiError(res);
+      firstErr ??= err;
+      if (model || !(res.status === 429 || res.status === 404)) throw err; // only quota / missing model is worth retrying
+      res = null;
     }
-    if (cand.finishReason) finish = cand.finishReason;
-  });
+    if (!res) throw firstErr;
+
+    // Keep the model's parts exactly as sent (incl. thought signatures) so tool calls can continue.
+    const parts = [];
+    const calls = [];
+    finish = "";
+    await readSSE(res, (chunk) => {
+      if (chunk.promptFeedback?.blockReason) blocked = chunk.promptFeedback.blockReason;
+      const cand = chunk.candidates?.[0];
+      if (!cand) return;
+      for (const part of cand.content?.parts || []) {
+        parts.push(part);
+        if (part.functionCall) calls.push(part.functionCall);
+        else if (part.text && !part.thought) {
+          onStatus("");
+          full += part.text;
+          onText(part.text);
+        }
+      }
+      if (cand.finishReason) finish = cand.finishReason;
+    });
+    if (!calls.length) break;
+
+    contents.push({ role: "model", parts });
+    const responses = [];
+    for (const call of calls) {
+      const shown = (t) => {
+        full += t;
+        onText(t);
+      };
+      const out = call.name === SYMPY_TOOL.name ? await useSympy(call.args?.code, shown, onStatus, signal) : "Unknown tool.";
+      responses.push({ functionResponse: { name: call.name, ...(call.id ? { id: call.id } : {}), response: { output: out } } });
+    }
+    contents.push({ role: "user", parts: responses });
+  }
   if (!full) {
     if (blocked || /SAFETY|PROHIBITED/.test(finish)) throw new FreeError("Gemini declined to answer that one. Try asking another way.");
     throw new FreeError("Gemini sent an empty reply. Try again.");
@@ -1020,6 +1099,7 @@ function openSettings(note = "") {
   $("#set-web").checked = settings.webSearch;
   $("#set-voice").value = settings.voiceLang;
   $("#set-personality").value = settings.personality;
+  $("#set-sympy").checked = settings.sympy;
   showProviderFields();
   if (!dialog.open) dialog.showModal();
   if (!activeKey()) ({ gemini: $("#set-gkey"), openrouter: $("#set-okey"), claude: $("#set-key") })[settings.provider].focus();
@@ -1038,6 +1118,7 @@ $("#settings-form").addEventListener("submit", (e) => {
     webSearch: $("#set-web").checked,
     voiceLang: $("#set-voice").value,
     personality: $("#set-personality").value.trim(),
+    sympy: $("#set-sympy").checked,
     v2: true,
   };
   if (!prefs.set("settings", settings)) toast("Couldn't save settings in this browser; they'll last until you close the tab.");
@@ -1061,14 +1142,35 @@ $("#clear-all").onclick = async () => {
 // =====================================================================
 // Wiring
 // =====================================================================
+// Grow the message box with its text. Measuring only once per frame keeps typing smooth.
+let growQueued = false;
+let lastBoxValue = "";
 function autoGrow() {
-  input.style.height = "auto";
-  input.style.height = Math.min(input.scrollHeight, 180) + "px";
   updateSendState();
+  if (growQueued) return;
+  growQueued = true;
+  requestAnimationFrame(() => {
+    growQueued = false;
+    const v = input.value;
+    // Only re-measure when lines may have changed (a new line, deleted text, or a long line).
+    if (v.length < lastBoxValue.length || v.includes("\n") || input.scrollHeight > input.clientHeight + 1 || !v) {
+      input.style.height = "auto";
+      input.style.height = Math.min(input.scrollHeight, 180) + "px";
+    }
+    lastBoxValue = v;
+  });
+}
+let typingTimer = 0;
+function onTyping() {
+  stars?.pause();
+  document.body.classList.add("typing");
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => document.body.classList.remove("typing"), 900);
+  autoGrow();
 }
 const touchDevice = matchMedia("(pointer: coarse)").matches;
 if (touchDevice) $(".hint").textContent = "Tap ➤ to send · 🎤 to talk · ＋ for photos & files";
-input.addEventListener("input", autoGrow);
+input.addEventListener("input", onTyping);
 input.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !touchDevice) {
     e.preventDefault();
@@ -1086,7 +1188,7 @@ document.querySelectorAll(".suggestions button").forEach((b) => (b.onclick = () 
 $("#open-side").onclick = () => document.body.classList.add("side-open");
 $("#close-side").onclick = $("#scrim").onclick = () => document.body.classList.remove("side-open");
 
-startStarfield($("#stars"));
+stars = startStarfield($("#stars"));
 setBusy(false);
 migrateOldChats()
   .catch(console.error)
