@@ -1,6 +1,6 @@
 # 🌌 Project S – Free Hinglish AI for Students
 
-**A personal AI tutor in a single HTML file, by Shivanshu Sharma.**
+**A personal AI in a single HTML file, by Shivanshu Sharma.**
 
 ### 👉 Try it now: **[17shivanshusharma.github.io/Project-S](https://17shivanshusharma.github.io/Project-S/)**
 
