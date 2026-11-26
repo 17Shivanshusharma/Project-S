@@ -7,6 +7,7 @@ import katex from "katex";
 import { startStarfield } from "./space.js";
 import { playIntro } from "./intro.js";
 import { runSympy, sympyLoaded, SYMPY_TOOL } from "./sympy.js";
+import { WEB_TOOLS, webSearch, readWebpage } from "./search.js";
 
 const NAME = "S";
 const $ = (sel) => document.querySelector(sel);
@@ -41,11 +42,12 @@ const prefs = {
 const DEFAULT_SETTINGS = {
   provider: "gemini", // "gemini" (free), "openrouter" (free backup) or "claude"
   geminiKey: "",
-  geminiModel: "gemini-3.5-flash-lite",
+  geminiModel: "auto", // "auto" picks by mode
+  mode: "fast", // "fast", "reasoning" or "coding"
   openrouterKey: "",
   claudeKey: "",
-  model: "claude-opus-5-5",
-  effort: "medium",
+  model: "auto",
+  effort: "auto",
   webSearch: true,
   voiceLang: "en-IN",
   personality: "",
@@ -58,13 +60,54 @@ if (!saved.v2) {
   if (saved.geminiModel === "gemini-3.8-flash") saved.geminiModel = "gemini-3.5-flash-lite";
   saved.v2 = true;
 }
+if (!saved.v3) {
+  // New in v3: modes pick the model automatically, and web search works with every brain.
+  saved.geminiModel = "auto";
+  saved.model = "auto";
+  saved.effort = "auto";
+  saved.webSearch = true;
+  saved.v3 = true;
+}
 let settings = { ...DEFAULT_SETTINGS, ...saved };
+const saveSettings = () => prefs.set("settings", settings);
 const activeKey = () =>
   ({ gemini: settings.geminiKey, openrouter: settings.openrouterKey, claude: settings.claudeKey })[settings.provider];
+// Smart model selector: each mode has a preferred order; if one model fails, the next is tried.
+const MODES = {
+  fast: { label: "⚡ Fast", effort: "low" },
+  reasoning: { label: "🧠 Reasoning", effort: "high" },
+  coding: { label: "💻 Coding", effort: "medium" },
+};
+const GEMINI_FREE = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.6-flash"];
+const GEMINI_BY_MODE = {
+  fast: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.6-flash", "gemini-3.8-flash"],
+  reasoning: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
+  coding: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
+};
+const CLAUDE_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
+const CLAUDE_BY_MODE = {
+  fast: ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"],
+  reasoning: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
+  coding: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
+};
+const MODEL_NAMES = {
+  "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite",
+  "gemini-3.1-flash-lite": "Gemini 3.1 Flash-Lite",
+  "gemini-3.8-flash": "Gemini 3.8 Flash",
+  "gemini-3.6-flash": "Gemini 3.6 Flash",
+  "claude-opus-5-5": "Claude Opus 5.5",
+  "claude-sonnet-5-5": "Claude Sonnet 5.5",
+  "claude-haiku-5-5": "Claude Haiku 5.5",
+};
+const mode = () => (MODES[settings.mode] ? settings.mode : "fast");
+const preferFirst = (pick, list) => (pick && pick !== "auto" ? [pick, ...list.filter((m) => m !== pick)] : list);
+const geminiOrder = () => preferFirst(settings.geminiModel, GEMINI_BY_MODE[mode()]);
+const claudeOrder = () => preferFirst(settings.model, CLAUDE_BY_MODE[mode()]);
+const claudeEffort = () => (settings.effort && settings.effort !== "auto" ? settings.effort : MODES[mode()].effort);
 const activeModel = () =>
-  ({ gemini: settings.geminiModel, openrouter: "OpenRouter free models", claude: settings.model })[settings.provider];
+  ({ gemini: MODEL_NAMES[geminiOrder()[0]], openrouter: "OpenRouter free models", claude: MODEL_NAMES[claudeOrder()[0]] })[settings.provider];
 // Web search costs extra on Gemini, so S only searches when Claude is the brain.
-const searchOn = () => settings.provider === "claude" && settings.webSearch;
+const searchOn = () => !!settings.webSearch;
 // The SymPy maths engine is a tool the AI calls. OpenRouter's free models don't all support tools.
 const sympyOn = () => settings.sympy && settings.provider !== "openrouter";
 
@@ -83,13 +126,20 @@ How to answer:
   - Stay respectful: never call the question easy or the user weak, and never mention their level. Just make it easy.
 - For maths, physics and chemistry problems: first write what is given and what we need to find, then the formula used (and what each letter in it means), then the working step by step, and end with a clearly marked **Final answer**. Double-check calculations.
 - Write all maths with LaTeX: inline as $...$ and display equations as $$...$$ on their own lines. Use units in physics answers.
+- When the user attaches a document, photo or notes: answer from that file. Say where in it the answer is (page, heading or line) when you can, and say clearly if something isn't in the file. For summaries use short headings and bullet points.
+- Use Markdown well: headings for long answers, tables for comparisons, and code blocks with a language tag for code.
 - For theory questions: give a simple explanation first, then key points, and an example or analogy when it helps.
 - If the user sends a photo of a question, a page or a diagram, read it carefully and solve or explain what is in it.
 - Use Markdown (headings, bullet lists, tables, code blocks with a language tag) when it makes the answer easier to read.
 - If you're not sure about something, say so instead of guessing.
 - About yourself: you were made by Shivanshu Sharma. If anyone asks who made you, who created you or who your owner is, say Shivanshu Sharma made you. If anyone asks "who is Shivanshu Sharma?", answer that Shivanshu Sharma is the one who made you (in the user's language, e.g. "Shivanshu Sharma ne mujhe banaya hai"). If someone asks which AI model powers you, say S is built by Shivanshu Sharma and currently runs on ${({ gemini: "Google Gemini", openrouter: "free models from OpenRouter", claude: "Anthropic's Claude" })[settings.provider]}.
 ${sympyOn() ? `- You have a maths engine: the run_sympy tool runs Python with SymPy and returns exact results. Use it for any calculation that isn't trivial (equations and systems, integrals, derivatives, limits, series, differential equations, matrices, simplifying, factorising, big or precise arithmetic) and to double-check final answers. You can call it several times. If it returns an error, fix the code and try again. After using it, still explain the method step by step in normal maths (LaTeX) the way a teacher would, and don't paste the code into your answer: the user can already see it.` : ""}
-${searchOn() ? "- You can search the web. Use it for recent events, prices, or facts you are unsure about, and mention your sources." : "- You cannot browse the web, so for very recent news say your information may be out of date."}
+${searchOn() ? `- You can search the web (web_search) and open links (read_webpage). Search for anything recent or time-sensitive (news, prices, results, dates, people's current roles) and for facts you're unsure about. To summarise several websites, read each one, then combine.
+- When you used the web, keep facts and guesses clearly apart:
+  **✅ Verified (sources se):** facts the sources state, each with its source number like [1].
+  **🤔 Andaza / not confirmed:** anything you're inferring or that sources don't confirm. Leave this out if there's nothing.
+  The app lists the source links under your answer, so don't paste long URLs.` : "- Web search is off, so for very recent news say your information may be out of date and suggest turning on 🌐 Web search."}
+- Current mode: ${{ fast: "FAST. Keep answers short and direct (still correct and simple). No long introductions.", reasoning: "REASONING. Think carefully, break the problem down, check each step and the final answer before replying.", coding: "CODING. Write complete, runnable code in code blocks with the language tag, with short comments. Then explain how it works and how to run it, and mention edge cases." }[mode()]}
 ${settings.personality ? "\nExtra instructions from your owner:\n" + settings.personality : ""}`;
 }
 
@@ -136,7 +186,8 @@ const db = (() => {
     get: (id) => run("chats", "readonly", (s, m) => (s ? s.get(id) : { result: m.get(id) })),
     async put(chat) {
       chat.updatedAt = Date.now();
-      const meta = { id: chat.id, title: chat.title, updatedAt: chat.updatedAt };
+      const fileCount = chat.messages.reduce((n, m) => n + (m.attachments?.length || 0), 0);
+      const meta = { id: chat.id, title: chat.title, updatedAt: chat.updatedAt, fileCount };
       await run("chats", "readwrite", (s, m) => (s ? s.put(chat) : m.set(chat.id, chat)));
       await run("meta", "readwrite", (s, m) => (s ? s.put(meta) : m.set(meta.id, meta)));
     },
@@ -285,6 +336,55 @@ function attachmentChips(files) {
   return wrap;
 }
 
+// Under each answer: a Copy button and the source links (when S searched the web).
+function addExtras(bubble, getText, sources = []) {
+  const msg = bubble.closest(".msg");
+  msg.querySelector(".msg-extras")?.remove();
+  const box = document.createElement("div");
+  box.className = "msg-extras";
+  if (sources?.length) {
+    const src = document.createElement("div");
+    src.className = "sources";
+    const h = document.createElement("p");
+    h.className = "sources-title";
+    h.textContent = `🔗 Sources (${sources.length})`;
+    src.appendChild(h);
+    const ol = document.createElement("ol");
+    for (const x of sources) {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = /^https?:/i.test(x.url) ? x.url : "#";
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = x.title;
+      const host = document.createElement("span");
+      try {
+        host.textContent = new URL(x.url).hostname.replace(/^www\./, "");
+      } catch {}
+      li.append(a, host);
+      ol.appendChild(li);
+    }
+    src.appendChild(ol);
+    box.appendChild(src);
+  }
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.className = "act-btn";
+  copy.textContent = "⧉ Copy answer";
+  copy.onclick = async () => {
+    try {
+      // Copy clean text without the SymPy boxes.
+      await navigator.clipboard.writeText(getText().replace(/<details class="calc">[\s\S]*?<\/details>\s*/g, "").trim());
+      copy.textContent = "✓ Copied";
+    } catch {
+      copy.textContent = "Couldn't copy";
+    }
+    setTimeout(() => (copy.textContent = "⧉ Copy answer"), 1500);
+  };
+  box.appendChild(copy);
+  msg.appendChild(box);
+}
+
 function addMessage(role, text = "", files = []) {
   welcomeEl.hidden = true;
   const wrap = document.createElement("div");
@@ -316,7 +416,9 @@ async function renderSidebar() {
   const chats = await db.list();
   const list = $("#chat-list");
   list.innerHTML = "";
+  const q = $("#chat-search").value.trim().toLowerCase();
   for (const c of chats) {
+    if (q && !c.title.toLowerCase().includes(q)) continue;
     const item = document.createElement("div");
     item.className = "chat-item" + (c.id === currentChat?.id ? " active" : "");
     const a = document.createElement("a");
@@ -340,11 +442,19 @@ async function renderSidebar() {
     item.append(a, del);
     list.appendChild(item);
   }
-  $("#model-info").textContent = `${activeModel()}${searchOn() ? " · web search on" : ""} · ${chats.length} chats`;
+  if (!list.children.length) {
+    const empty = document.createElement("p");
+    empty.className = "side-empty";
+    empty.textContent = q ? "Koi chat nahi mili." : "Abhi koi chat nahi. Kuch bhi poocho!";
+    list.appendChild(empty);
+  }
+  $("#model-info").textContent = `${BRAIN_NAMES[settings.provider]} · ${activeModel()} · ${chats.length} chats`;
+  updateModeUI();
 }
 
 async function openChat(id) {
   controller?.abort();
+  showView("chat");
   messagesEl.querySelectorAll(".msg").forEach((m) => m.remove());
   welcomeEl.hidden = false;
   currentChat = id ? (await db.get(id)) || null : null;
@@ -353,7 +463,9 @@ async function openChat(id) {
   if (currentChat) {
     for (const m of currentChat.messages) {
       const t = textOf(m.content);
-      if (t || m.attachments?.length) addMessage(m.role, t, m.attachments || []);
+      if (!t && !m.attachments?.length) continue;
+      const b = addMessage(m.role, t, m.attachments || []);
+      if (m.role === "assistant") addExtras(b, () => t, m.sources);
     }
     scrollToBottom(true);
   }
@@ -470,6 +582,8 @@ function renderPending() {
     item.appendChild(x);
     tray.appendChild(item);
   });
+  $("#doc-chips").hidden = !pendingFiles.length;
+  if (!pendingFiles.length) input.placeholder = "Message S…";
   updateSendState();
 }
 
@@ -607,6 +721,15 @@ const fileNote = (files) => `[Earlier attached: ${files.map((f) => f.name).join(
 // =====================================================================
 // Sending
 // =====================================================================
+const BRAINS = ["gemini", "openrouter", "claude"];
+const BRAIN_NAMES = { gemini: "Gemini", openrouter: "OpenRouter", claude: "Claude" };
+const keyFor = (b) => ({ gemini: settings.geminiKey, openrouter: settings.openrouterKey, claude: settings.claudeKey })[b];
+const ASK = { gemini: (c, ui) => askGemini(c, ui), openrouter: (c, ui) => askOpenRouter(c, ui), claude: (c, ui) => askClaude(c, ui) };
+function shortReason(err) {
+  const m = err instanceof FreeError ? err.message : friendlyError(err);
+  return m.split(/[.\n]/)[0].slice(0, 90);
+}
+
 async function send(text) {
   text = text.trim();
   if ((!text && !pendingFiles.length) || controller) return;
@@ -665,11 +788,42 @@ async function send(text) {
     }
   };
   const onStatus = (t) => (status.textContent = t);
+  const sources = [];
+  const addSource = (src) => {
+    const at = sources.findIndex((x) => x.url === src.url);
+    if (at >= 0) return at + 1;
+    sources.push({ title: String(src.title || src.url).slice(0, 140), url: src.url });
+    return sources.length;
+  };
+  const ui = { onText, onStatus, signal, addSource };
 
   try {
-    if (settings.provider === "gemini") await askGemini(chat, onText, onStatus, signal);
-    else if (settings.provider === "openrouter") await askOpenRouter(chat, onText, onStatus, signal);
-    else await askClaude(chat, onText, onStatus, signal);
+    // Fallback: if the chosen brain fails before answering, try the other brains you have keys for.
+    const order = [settings.provider, ...BRAINS.filter((b) => b !== settings.provider && keyFor(b))];
+    let firstErr = null;
+    for (const [n, brain] of order.entries()) {
+      try {
+        if (n > 0) onStatus(`${BRAIN_NAMES[order[n - 1]]} didn't answer, trying ${BRAIN_NAMES[brain]}…`);
+        await ASK[brain](chat, ui);
+        if (n > 0) {
+          const note = document.createElement("p");
+          note.className = "fallback-note";
+          note.textContent = `↪ ${BRAIN_NAMES[settings.provider]} didn't answer (${shortReason(firstErr)}), so this reply is from ${BRAIN_NAMES[brain]}.`;
+          bubble.closest(".msg").appendChild(note);
+        }
+        firstErr = null;
+        break;
+      } catch (err) {
+        firstErr ??= err;
+        if (signal.aborted || full) throw err; // stopped, or already part-answered: don't start over
+      }
+    }
+    if (firstErr) throw firstErr;
+    const last = chat.messages.at(-1);
+    if (sources.length && last?.role === "assistant") {
+      last.sources = sources;
+      await saveChat(chat);
+    }
   } catch (err) {
     // Remove the unanswered message so the next one still works.
     if (chat.messages.at(-1) === userMsg) {
@@ -690,7 +844,10 @@ async function send(text) {
       if (err instanceof Anthropic.AuthenticationError || err?.badKey) openSettings("That key didn't work. Paste a valid key.");
     }
   } finally {
-    if (full && !bubble.querySelector(".error")) paint();
+    if (full && !bubble.querySelector(".error")) {
+      paint();
+      addExtras(bubble, () => full, sources);
+    }
     if (!full && !bubble.querySelector(".error")) bubble.closest(".msg").remove();
     status.remove();
     controller = null;
@@ -711,6 +868,29 @@ async function useSympy(code, onText, onStatus, signal) {
   onStatus("Thinking…");
   return out;
 }
+
+// Every tool call the AI makes goes through here. `ui` shows progress and collects source links.
+async function runTool(name, args, ui) {
+  const { onText, onStatus, signal } = ui;
+  if (name === SYMPY_TOOL.name) return useSympy(args?.code, onText, onStatus, signal);
+  if (name === "web_search" || name === "read_webpage") {
+    const r =
+      name === "web_search"
+        ? (onStatus(`🌐 Searching: ${String(args?.query || "").slice(0, 60)}…`),
+          await webSearch(args?.query, { geminiKey: settings.geminiKey, model: GEMINI_BY_MODE.fast[0], signal }))
+        : (onStatus(`📖 Reading ${String(args?.url || "").replace(/^https?:\/\//, "").slice(0, 50)}…`), await readWebpage(args?.url, signal));
+    // Give each source one number for the whole answer, so [1], [2] match the list under it.
+    const nums = r.sources.map((src) => ui.addSource(src));
+    let text = r.text.replace(/^\[(\d+)\]/gm, (m, k) => (nums[k - 1] ? `[${nums[k - 1]}]` : m));
+    if (nums.length) text += "\n\nSources:\n" + r.sources.map((src, k) => `[${nums[k]}] ${src.title} (${src.url})`).join("\n");
+    onStatus("Thinking…");
+    return text;
+  }
+  return "Error: unknown tool.";
+}
+const customTools = () => [...(sympyOn() ? [SYMPY_TOOL] : []), ...(searchOn() ? WEB_TOOLS : [])];
+// Errors where trying another model makes sense (busy, quota, missing model, network).
+const retryable = (status) => !status || [404, 408, 429, 500, 502, 503, 504, 529].includes(status);
 
 // =====================================================================
 // Claude
@@ -751,73 +931,92 @@ function claudeMessages(chat) {
   });
 }
 
-async function askClaude(chat, onText, onStatus, signal) {
-  const client = new Anthropic({ apiKey: settings.claudeKey, dangerouslyAllowBrowser: true });
+async function askClaude(chat, ui) {
+  const client = new Anthropic({ apiKey: settings.claudeKey, dangerouslyAllowBrowser: true, maxRetries: 1 });
   const tools = [];
   if (searchOn()) tools.push({ type: "web_search_20260209", name: "web_search", max_uses: 5 });
-  if (sympyOn()) tools.push({ name: SYMPY_TOOL.name, description: SYMPY_TOOL.description, input_schema: SYMPY_TOOL.parameters });
-  const messages = claudeMessages(chat);
-  const content = []; // everything Claude wrote this turn
-  let shown = ""; // the reply as the user sees it (incl. SymPy boxes)
-  let usedSympy = false;
-  const show = (t) => {
-    shown += t;
-    onText(t);
-  };
-  // Continue the turn after SymPy results, or when web search pauses it ("pause_turn").
-  for (let round = 0; round < 10; round++) {
-    const stream = client.beta.messages.stream(
-      {
-        model: settings.model,
-        max_tokens: 64000,
-        system: systemPrompt(),
-        messages,
-        thinking: { type: "adaptive" },
-        output_config: { effort: settings.effort },
-        ...(tools.length ? { tools } : {}),
-        // If a safety check declines a request, the API retries it on a fallback model.
-        betas: ["server-side-fallback-2026-07-01"],
-        fallbacks: "default",
-      },
-      { signal },
-    );
-    stream.on("streamEvent", (event) => {
-      if (event.type === "content_block_start") {
-        const t = event.content_block.type;
-        if (t === "thinking") onStatus("Thinking…");
-        else if (t === "server_tool_use") onStatus("Searching the web…");
-        else if (t === "tool_use") onStatus("🧮 Writing a SymPy calculation…");
-        else if (t === "text") onStatus("");
-      } else if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-        show(event.delta.text);
-      }
-    });
-    const message = await stream.finalMessage();
-    content.push(...message.content);
-    if (message.stop_reason === "tool_use") {
-      messages.push({ role: "assistant", content: message.content });
-      const results = [];
-      for (const block of message.content) {
-        if (block.type !== "tool_use") continue;
-        const out = block.name === SYMPY_TOOL.name ? await useSympy(block.input?.code, show, onStatus, signal) : "Unknown tool.";
-        results.push({ type: "tool_result", tool_use_id: block.id, content: out });
-      }
-      messages.push({ role: "user", content: results });
-      usedSympy = true;
-      continue;
-    }
-    if (message.stop_reason === "pause_turn") {
-      messages.push({ role: "assistant", content: message.content });
-      continue;
-    }
-    if (message.stop_reason === "refusal") show("\n\n_I can't help with that one._");
-    if (message.stop_reason === "max_tokens") show("\n\n_(Reply cut off at the length limit.)_");
-    break;
+  for (const t of customTools()) {
+    if (t.name === "web_search") continue; // Claude has its own web search
+    tools.push({ name: t.name, description: t.description, input_schema: t.parameters });
   }
-  // Keep the full reply (incl. thinking) so the conversation stays consistent. After SymPy,
-  // save it as text instead: the tool calls only make sense together with their results.
-  chat.messages.push({ role: "assistant", content: usedSympy ? shown || "…" : content });
-  await saveChat(chat);
+  const models = claudeOrder();
+  let firstErr = null;
+  for (const [n, model] of models.entries()) {
+    let shown = ""; // the reply as the user sees it (incl. SymPy boxes)
+    const show = (t) => {
+      shown += t;
+      ui.onText(t);
+    };
+    try {
+      if (n > 0) ui.onStatus(`${MODEL_NAMES[models[n - 1]]} didn't answer, trying ${MODEL_NAMES[model]}…`);
+      const messages = claudeMessages(chat);
+      const content = []; // everything Claude wrote this turn
+      let usedTools = false;
+      // Continue the turn after tool results, or when web search pauses it ("pause_turn").
+      for (let round = 0; round < 12; round++) {
+        const stream = client.beta.messages.stream(
+          {
+            model,
+            max_tokens: 64000,
+            system: systemPrompt(),
+            messages,
+            thinking: { type: "adaptive" },
+            output_config: { effort: claudeEffort() },
+            ...(tools.length ? { tools } : {}),
+            // If a safety check declines a request, the API retries it on a fallback model.
+            betas: ["server-side-fallback-2026-07-01"],
+            fallbacks: "default",
+          },
+          { signal: ui.signal },
+        );
+        stream.on("streamEvent", (event) => {
+          if (event.type === "content_block_start") {
+            const t = event.content_block.type;
+            if (t === "thinking") ui.onStatus("Thinking…");
+            else if (t === "server_tool_use") ui.onStatus("🌐 Searching the web…");
+            else if (t === "tool_use") ui.onStatus(event.content_block.name === SYMPY_TOOL.name ? "🧮 Writing a SymPy calculation…" : "📖 Opening a page…");
+            else if (t === "text") ui.onStatus("");
+          } else if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+            show(event.delta.text);
+          }
+        });
+        const message = await stream.finalMessage();
+        content.push(...message.content);
+        for (const block of message.content) {
+          if (block.type === "web_search_tool_result" && Array.isArray(block.content))
+            for (const r of block.content) if (r.url) ui.addSource({ title: r.title || r.url, url: r.url });
+        }
+        if (message.stop_reason === "tool_use") {
+          messages.push({ role: "assistant", content: message.content });
+          const results = [];
+          for (const block of message.content) {
+            if (block.type !== "tool_use") continue;
+            const out = await runTool(block.name, block.input, { ...ui, onText: show });
+            results.push({ type: "tool_result", tool_use_id: block.id, content: out });
+          }
+          messages.push({ role: "user", content: results });
+          usedTools = true;
+          continue;
+        }
+        if (message.stop_reason === "pause_turn") {
+          messages.push({ role: "assistant", content: message.content });
+          continue;
+        }
+        if (message.stop_reason === "refusal") show("\n\n_I can't help with that one._");
+        if (message.stop_reason === "max_tokens") show("\n\n_(Reply cut off at the length limit.)_");
+        break;
+      }
+      // Keep the full reply (incl. thinking) so the conversation stays consistent. After our own
+      // tools, save it as text instead: tool calls only make sense together with their results.
+      chat.messages.push({ role: "assistant", content: usedTools ? shown || "…" : content });
+      await saveChat(chat);
+      return;
+    } catch (err) {
+      firstErr ??= err;
+      if (ui.signal.aborted || shown || !(err instanceof Anthropic.APIError) || !retryable(err.status)) throw err;
+    }
+  }
+  throw firstErr;
 }
 
 // =====================================================================
@@ -877,8 +1076,6 @@ async function finishReply(chat, full, onText, cutOff) {
   await saveChat(chat);
 }
 
-// Gemini models with a free tier, best daily limit first.
-const GEMINI_FREE = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.6-flash"];
 
 function geminiContents(chat) {
   const { msgs } = fitHistory(chat.messages, HISTORY_BUDGET.gemini);
@@ -898,10 +1095,12 @@ function geminiContents(chat) {
   });
 }
 
-async function askGemini(chat, onText, onStatus, signal) {
+async function askGemini(chat, ui) {
+  const { onText, onStatus, signal } = ui;
   const contents = geminiContents(chat);
-  const tools = sympyOn()
-    ? [{ functionDeclarations: [{ name: SYMPY_TOOL.name, description: SYMPY_TOOL.description, parameters: SYMPY_TOOL.parameters }] }]
+  const decl = customTools();
+  const tools = decl.length
+    ? [{ functionDeclarations: decl.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })) }]
     : undefined;
   const request = (model) =>
     fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
@@ -916,29 +1115,31 @@ async function askGemini(chat, onText, onStatus, signal) {
       }),
     });
 
-  // Try the chosen model first; if its free quota is used up, try the other free models.
-  const models = [settings.geminiModel, ...GEMINI_FREE.filter((m) => m !== settings.geminiModel)];
+  // Try the models in the order the mode prefers; if one is busy or its free quota is used up, try the next.
+  const models = geminiOrder();
   let full = "";
   let finish = "";
   let blocked = "";
   let model = null;
-  for (let round = 0; round < 10; round++) {
+  for (let round = 0; round < 12; round++) {
     let res, firstErr;
     for (const m of model ? [model] : models) {
       try {
         res = await request(m);
       } catch (err) {
         if (signal.aborted) throw err;
-        throw new FreeError("Couldn't reach Gemini. Check your internet connection.");
+        firstErr ??= new FreeError("Couldn't reach Gemini. Check your internet connection.");
+        if (model) throw firstErr;
+        continue; // network hiccup: try the next model
       }
       if (res.ok) {
-        if (!model && m !== settings.geminiModel) onStatus(`Using ${m} (free limit on ${settings.geminiModel} is used up)…`);
+        if (!model && m !== models[0]) onStatus(`Using ${MODEL_NAMES[m] || m} (${MODEL_NAMES[models[0]] || models[0]} didn't answer)…`);
         model = m;
         break;
       }
       const err = await geminiError(res);
       firstErr ??= err;
-      if (model || !(res.status === 429 || res.status === 404)) throw err; // only quota / missing model is worth retrying
+      if (model || !retryable(res.status)) throw err; // a bad key or request won't work on another model either
       res = null;
     }
     if (!res) throw firstErr;
@@ -966,12 +1167,12 @@ async function askGemini(chat, onText, onStatus, signal) {
 
     contents.push({ role: "model", parts });
     const responses = [];
+    const shown = (t) => {
+      full += t;
+      onText(t);
+    };
     for (const call of calls) {
-      const shown = (t) => {
-        full += t;
-        onText(t);
-      };
-      const out = call.name === SYMPY_TOOL.name ? await useSympy(call.args?.code, shown, onStatus, signal) : "Unknown tool.";
+      const out = await runTool(call.name, call.args, { ...ui, onText: shown });
       responses.push({ functionResponse: { name: call.name, ...(call.id ? { id: call.id } : {}), response: { output: out } } });
     }
     contents.push({ role: "user", parts: responses });
@@ -1032,7 +1233,21 @@ function openrouterMessages(chat) {
 }
 
 // OpenRouter: one free key gives access to many free models ("openrouter/free" picks one).
-async function askOpenRouter(chat, onText, onStatus, signal) {
+async function askOpenRouter(chat, ui) {
+  const { onText, onStatus, signal } = ui;
+  const messages = openrouterMessages(chat);
+  // OpenRouter's free models can't all use tools, so S searches first and hands them the results.
+  if (searchOn()) {
+    const q = textOf(chat.messages.at(-1)?.content || "").slice(0, 200);
+    if (q.length > 3) {
+      onStatus(`🌐 Searching: ${q.slice(0, 60)}…`);
+      const found = await runTool("web_search", { query: q }, ui);
+      const last = messages.at(-1);
+      const note = `\n\n[Web search results for this question. Use them if relevant and cite as [n].]\n${found}`;
+      if (typeof last.content === "string") last.content += note;
+      else last.content.push({ type: "text", text: note });
+    }
+  }
   let res;
   try {
     res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -1043,7 +1258,7 @@ async function askOpenRouter(chat, onText, onStatus, signal) {
         Authorization: `Bearer ${settings.openrouterKey}`,
         "X-Title": "S",
       },
-      body: JSON.stringify({ model: "openrouter/free", messages: openrouterMessages(chat), stream: true }),
+      body: JSON.stringify({ model: "openrouter/free", messages, stream: true }),
     });
   } catch (err) {
     if (signal.aborted) throw err;
@@ -1125,7 +1340,9 @@ $("#settings-form").addEventListener("submit", (e) => {
     voiceLang: $("#set-voice").value,
     personality: $("#set-personality").value.trim(),
     sympy: $("#set-sympy").checked,
+    mode: settings.mode,
     v2: true,
+    v3: true,
   };
   if (!prefs.set("settings", settings)) toast("Couldn't save settings in this browser; they'll last until you close the tab.");
   renderSidebar();
@@ -1211,6 +1428,147 @@ $("#open-settings").onclick = () => openSettings();
 document.querySelectorAll(".suggestions button").forEach((b) => (b.onclick = () => send(b.dataset.q || b.textContent)));
 $("#open-side").onclick = () => document.body.classList.add("side-open");
 $("#close-side").onclick = $("#scrim").onclick = () => document.body.classList.remove("side-open");
+
+// ---------- Sidebar views: History (chat list) and Library (all uploaded files) ----------
+function showView(view) {
+  const lib = view === "library";
+  $("#library").hidden = !lib;
+  messagesEl.hidden = lib;
+  $("#composer").hidden = lib;
+  $("#chips").hidden = lib;
+  $("#tray").hidden = lib || !pendingFiles.length;
+  document.querySelector(".hint").hidden = lib;
+  $("#nav-history").classList.toggle("active", !lib);
+  $("#nav-library").classList.toggle("active", lib);
+  if (lib) {
+    $("#chat-title").textContent = "Library";
+    renderLibrary();
+  } else $("#chat-title").textContent = currentChat?.title || "New chat";
+}
+$("#nav-history").onclick = () => {
+  showView("chat");
+  $("#chat-search").focus();
+};
+$("#nav-library").onclick = () => {
+  document.body.classList.remove("side-open");
+  showView("library");
+};
+$("#chat-search").addEventListener("input", () => renderSidebar());
+
+async function renderLibrary() {
+  const list = $("#lib-list");
+  list.innerHTML = '<p class="side-empty">Loading…</p>';
+  const items = [];
+  for (const meta of await db.list()) {
+    if (meta.fileCount === 0) continue;
+    const chat = await db.get(meta.id);
+    for (const m of chat?.messages || [])
+      for (const f of m.attachments || []) items.push({ f, chat: meta, at: meta.updatedAt });
+  }
+  list.innerHTML = "";
+  if (!items.length) {
+    list.innerHTML = '<p class="side-empty">Abhi koi file nahi. Chat mein ＋ dabake photo, PDF ya notes bhejo, wo yahan dikhengi.</p>';
+    return;
+  }
+  for (const { f, chat } of items) {
+    const card = document.createElement("div");
+    card.className = "lib-card";
+    const thumb = document.createElement("div");
+    thumb.className = "lib-thumb";
+    if (f.kind === "image") {
+      const img = document.createElement("img");
+      img.src = `data:${f.mime};base64,${f.data}`;
+      img.alt = f.name;
+      thumb.appendChild(img);
+    } else thumb.textContent = f.kind === "pdf" ? "📄" : "📝";
+    const info = document.createElement("div");
+    info.className = "lib-info";
+    const name = document.createElement("b");
+    name.textContent = f.name;
+    const from = document.createElement("a");
+    from.href = "#";
+    from.textContent = `From: ${chat.title}`;
+    from.onclick = (e) => {
+      e.preventDefault();
+      openChat(chat.id);
+    };
+    const acts = document.createElement("div");
+    acts.className = "lib-acts";
+    for (const [label, q] of [
+      ["📝 Summarize", "Is file ka simple summary banao: main points, short mein."],
+      ["❓ Ask a question", ""],
+    ]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip-btn";
+      b.textContent = label;
+      b.onclick = async () => {
+        await openChat(null);
+        pendingFiles = [structuredClone(f)];
+        renderPending();
+        if (q) send(q);
+        else {
+          input.placeholder = `"${f.name}" ke baare mein poocho…`;
+          input.focus();
+        }
+      };
+      acts.appendChild(b);
+    }
+    info.append(name, from, acts);
+    card.append(thumb, info);
+    list.appendChild(card);
+  }
+}
+
+// ---------- Mode + model selector ----------
+const modeMenu = $("#mode-menu");
+function updateModeUI() {
+  $("#mode-btn").textContent = `${MODES[mode()].label} ▾`;
+  document.querySelectorAll(".mode-opt").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode()));
+  const pick = $("#model-pick");
+  const opts =
+    settings.provider === "gemini" ? GEMINI_FREE : settings.provider === "claude" ? CLAUDE_MODELS : [];
+  const current = settings.provider === "gemini" ? settings.geminiModel : settings.model;
+  pick.innerHTML = "";
+  const auto = new Option(`Auto (${activeModel()})`, "auto");
+  pick.add(auto);
+  for (const m of opts) pick.add(new Option(MODEL_NAMES[m] || m, m));
+  pick.value = settings.provider === "openrouter" ? "auto" : opts.includes(current) ? current : "auto";
+  pick.disabled = settings.provider === "openrouter";
+  const web = $("#web-toggle");
+  web.setAttribute("aria-pressed", String(searchOn()));
+  web.textContent = `🌐 Web search: ${searchOn() ? "On" : "Off"}`;
+}
+$("#mode-btn").onclick = (e) => {
+  e.stopPropagation();
+  modeMenu.hidden = !modeMenu.hidden;
+};
+document.addEventListener("click", (e) => {
+  if (!modeMenu.hidden && !modeMenu.contains(e.target) && e.target !== $("#mode-btn")) modeMenu.hidden = true;
+});
+document.querySelectorAll(".mode-opt").forEach(
+  (b) =>
+    (b.onclick = () => {
+      settings.mode = b.dataset.mode;
+      saveSettings();
+      updateModeUI();
+      modeMenu.hidden = true;
+      toast(`${MODES[mode()].label} mode · ${activeModel()}`);
+    }),
+);
+$("#model-pick").onchange = (e) => {
+  if (settings.provider === "gemini") settings.geminiModel = e.target.value;
+  else if (settings.provider === "claude") settings.model = e.target.value;
+  saveSettings();
+  renderSidebar();
+};
+$("#web-toggle").onclick = () => {
+  settings.webSearch = !settings.webSearch;
+  saveSettings();
+  updateModeUI();
+};
+// Quick actions for attached files
+document.querySelectorAll(".doc-act").forEach((b) => (b.onclick = () => send(b.dataset.q)));
 
 stars = startStarfield($("#stars"));
 setBusy(false);

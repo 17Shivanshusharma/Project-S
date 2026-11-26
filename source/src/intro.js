@@ -20,7 +20,7 @@ export function playIntro() {
   size();
 
   // Particles for the burst
-  const COLORS = ["#ffffff", "#f5d0fe", "#e879f9", "#c084fc", "#a855f7", "#7c3aed", "#67e8f9"];
+  const COLORS = ["#ffffff", "#cfe7ff", "#74bdfe", "#81acff", "#4f92fd", "#337df4", "#67e8f9"];
   let parts = [];
   function burst() {
     const cx = innerWidth / 2;
@@ -38,7 +38,7 @@ export function playIntro() {
       };
     });
     const loop = () => {
-      ctx.fillStyle = "rgba(3, 2, 10, 0.22)"; // leaves short trails
+      ctx.fillStyle = "rgba(2, 4, 10, 0.22)"; // leaves short trails
       ctx.fillRect(0, 0, innerWidth, innerHeight);
       let alive = 0;
       for (const p of parts) {

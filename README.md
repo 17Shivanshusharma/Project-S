@@ -18,6 +18,23 @@ S is a space-themed AI chat app that runs entirely in your browser. There is not
 
 ## ✨ Features
 
+**New in this version**
+
+- **New look:** deep navy and black with electric blue accents. A clean, distraction-free chat screen.
+- **Sidebar:** ＋ New chat, 🕘 History (with search), 📚 Library and ⚙ Settings.
+- **📚 Library:** every photo, PDF and note you've uploaded, in one place. Tap **Summarize** or **Ask a question** to start a new chat with that file.
+- **Document tools:** attach a PDF, photo or notes and tap 📝 Summarize, 🔑 Key points, ❓ Quiz me or 🔍 Explain. S answers from the file and says where in it the answer is.
+- **🌐 Real web search with sources:** S searches when a question needs fresh information, can read and summarize several websites, lists the source links under the answer, and keeps **✅ verified facts** separate from **🤔 guesses**.
+- **Smart model selector:** ⚡ Fast, 🧠 Reasoning and 💻 Coding modes pick the best model for the job, or choose a model yourself. If a model fails, S tries the next one, and then your other brain (for example OpenRouter) if you've added its key.
+- **Better answers:** tables, code blocks with Copy buttons, and a Copy answer button.
+
+| Web search with sources | Modes | Library |
+|---|---|---|
+| ![Web search](screenshots/web-search.png) | ![Modes](screenshots/modes.png) | ![Library](screenshots/library.png) |
+
+**Everything else**
+
+
 - **One file:** the whole app is `index.html` (about 1 MB). Open it on a phone or computer.
 - **Free to use:** works with a free Google Gemini key. OpenRouter (free) and Claude (paid) are also supported.
 - **Easy explanations:** S explains any question in simple everyday words, in small steps, with real-life examples, a check of the answer and a "yaad rakhne ki baat" at the end.
@@ -117,6 +134,7 @@ npm run build      # writes out/S.html
 
 - `src/app.js`: chat logic, the providers (Gemini, OpenRouter, Claude), attachments, mic and storage
 - `src/sympy.js`: the SymPy maths engine (Pyodide in a Web Worker)
+- `src/search.js`: web search (Google Search via your Gemini key when allowed, otherwise Wikipedia + a free page reader)
 - `src/space.js`: the 3D starfield
 - `src/intro.js`: the black hole intro animation
 - `src/style.css` and `src/template.html`: the look and the layout

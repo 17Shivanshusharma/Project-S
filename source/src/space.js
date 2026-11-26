@@ -6,7 +6,7 @@ export function startStarfield(canvas) {
   if (!canvas?.getContext) return;
   const ctx = canvas.getContext("2d");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const COLORS = ["#ffffff", "#e9d5ff", "#c4b5fd", "#a5b4fc", "#f5d0fe", "#bae6fd"];
+  const COLORS = ["#ffffff", "#d5e4ff", "#b3d4ff", "#a5b4fc", "#cfe7ff", "#bae6fd"];
   let w = 0, h = 0, dpr = 1, stars = [];
   let tx = 0, ty = 0, px = 0, py = 0; // target and current tilt
   let cssX = 0, cssY = 0; // tilt last written to CSS
