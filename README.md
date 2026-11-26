@@ -43,7 +43,7 @@ S is a space-themed AI chat app that runs entirely in your browser. There is not
 - **Photos and files:** the ＋ button opens the camera, photos, PDFs or text files. Take a photo of a question and S solves it.
 - **Voice typing:** tap 🎤 and speak, in English, Hinglish or Hindi.
 - **Hinglish support:** S replies in the language you write in.
-- **3D space look:** a black hole intro animation, a moving 3D starfield, a spinning black hole and glass panels.
+- **Space feel:** a blue black hole intro animation and a calm, subtle starfield behind the chat.
 - **Long chats, saved on your device:** chats are stored in your browser (IndexedDB), so you can keep thousands of them.
 - **Private:** your API key and chats stay in your own browser. They are only sent to the AI provider you choose.
 
