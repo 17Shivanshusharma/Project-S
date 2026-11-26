@@ -12,7 +12,7 @@ S is a space-themed AI chat app that runs entirely in your browser. There is not
 
 [![Project S explainer video: click to watch](media/preview.gif)](https://17shivanshusharma.github.io/Project-S/media/project-s-explainer.mp4)
 
-**[▶ Watch the full video (74 seconds)](https://17shivanshusharma.github.io/Project-S/media/project-s-explainer.mp4)**: what S can do, how to make your free key, and why your data stays with you.
+**[▶ Watch the full video (85 seconds)](https://17shivanshusharma.github.io/Project-S/media/project-s-explainer.mp4)**: what S can do, how it explains any question in easy language, how to make your free key, and why your data stays with you.
 
 ![S intro](screenshots/intro.png)
 
@@ -20,6 +20,7 @@ S is a space-themed AI chat app that runs entirely in your browser. There is not
 
 - **One file:** the whole app is `index.html` (about 1 MB). Open it on a phone or computer.
 - **Free to use:** works with a free Google Gemini key. OpenRouter (free) and Claude (paid) are also supported.
+- **Easy explanations:** S explains any question in simple everyday words, in small steps, with real-life examples, a check of the answer and a "yaad rakhne ki baat" at the end.
 - **Every subject:** maths, physics, chemistry, biology, history, English, coding, plus JEE and NEET prep. Maths is solved step by step, and formulas are rendered properly.
 - **Real maths engine (SymPy):** for hard maths (equations, integrals, limits, differential equations, matrices), S runs real Python with [SymPy](https://www.sympy.org) inside your browser and shows the calculation in a small fold-out box. It downloads once (about 15 MB) the first time, using [Pyodide](https://pyodide.org). Works with Gemini and Claude; you can turn it off in Settings.
 - **Photos and files:** the ＋ button opens the camera, photos, PDFs or text files. Take a photo of a question and S solves it.
@@ -29,9 +30,15 @@ S is a space-themed AI chat app that runs entirely in your browser. There is not
 - **Long chats, saved on your device:** chats are stored in your browser (IndexedDB), so you can keep thousands of them.
 - **Private:** your API key and chats stay in your own browser. They are only sent to the AI provider you choose.
 
-| Home | Maths | Settings |
-|---|---|---|
-| ![Home](screenshots/home.png) | ![Maths](screenshots/maths.png) | ![Settings](screenshots/settings.png) |
+| Home | Settings |
+|---|---|
+| ![Home](screenshots/home.png) | ![Settings](screenshots/settings.png) |
+
+### 🧮 Example: a maths question, explained step by step
+
+S explains every answer in simple words, one small step at a time: what the question means, why each step is done, a check, and one line to remember. For hard maths it also checks the answer with SymPy.
+
+<img src="screenshots/maths.png" alt="S solving 2x² − 5x + 3 = 0 step by step in easy Hinglish" width="340" />
 
 ## 🚀 How to use
 
