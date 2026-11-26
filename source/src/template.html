@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src https://generativelanguage.googleapis.com https://openrouter.ai https://api.anthropic.com https://cdn.jsdelivr.net https://en.wikipedia.org https://r.jina.ai; object-src 'none'; base-uri 'none'; frame-src 'none'" />
+  <meta name="referrer" content="no-referrer" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <meta name="color-scheme" content="dark" />
   <meta name="theme-color" content="#050a18" />
@@ -67,6 +69,10 @@
     <header class="top">
       <button id="open-side" class="icon-btn only-mobile" aria-label="Open menu">☰</button>
       <h1 id="chat-title">New chat</h1>
+      <div class="subj-wrap">
+        <button id="subject-btn" type="button" class="subj-btn" aria-haspopup="true" title="Theme">💬</button>
+        <div id="subject-menu" hidden><p class="menu-label">Subject theme (sirf is chat ka)</p></div>
+      </div>
       <div class="mode-wrap">
         <button id="mode-btn" type="button" class="mode-btn" aria-haspopup="true">⚡ Fast ▾</button>
         <div id="mode-menu" hidden>
@@ -74,6 +80,7 @@
           <button type="button" class="mode-opt" data-mode="fast"><b>⚡ Fast</b><span>Jaldi aur chhota jawab</span></button>
           <button type="button" class="mode-opt" data-mode="reasoning"><b>🧠 Reasoning</b><span>Mushkil sawaal, dhyaan se soch ke</span></button>
           <button type="button" class="mode-opt" data-mode="coding"><b>💻 Coding</b><span>Poora chalne wala code, samjha ke</span></button>
+          <button type="button" class="mode-opt" data-mode="study"><b>📚 Study</b><span>Tutor: hints, quiz, flashcards, revision</span></button>
           <label class="menu-label" for="model-pick">Model</label>
           <select id="model-pick"></select>
           <p class="menu-note">Agar koi model fail ho, S apne aap doosra try karta hai.</p>
@@ -207,6 +214,18 @@
 
       <label class="check"><input id="set-sympy" type="checkbox" /> 🧮 Maths engine (SymPy)</label>
       <p class="small">S solves hard maths exactly with SymPy, running inside your browser. It downloads once (about 15 MB) the first time it's needed. Works with Gemini and Claude.</p>
+
+      <label class="check"><input id="set-memory" type="checkbox" /> 🧠 Memory (S yaad rakhe tumhare baare mein)</label>
+      <p class="small">S sirf wahi yaad rakhta hai jo tum batate ho (jaise class, exam, naam). Ye bhi sirf isi browser mein save hota hai.</p>
+      <div id="memory-list" class="memory-list"></div>
+
+      <label>Chat backup</label>
+      <div class="backup-row">
+        <button type="button" id="export-chats" class="btn">💾 Backup download</button>
+        <button type="button" id="import-chats" class="btn">📂 Backup restore</button>
+        <input id="import-file" type="file" accept="application/json,.json" hidden />
+      </div>
+      <p class="small">Naye phone pe chats le jaane ke liye. Backup mein API key nahi hoti.</p>
 
       <label for="set-voice">Mic language</label>
       <select id="set-voice">

@@ -12,13 +12,29 @@ S is a space-themed AI chat app that runs entirely in your browser. There is not
 
 [![Project S explainer video: click to watch](media/preview.gif)](https://17shivanshusharma.github.io/Project-S/media/project-s-explainer.mp4)
 
-**[▶ Watch the full video (85 seconds)](https://17shivanshusharma.github.io/Project-S/media/project-s-explainer.mp4)**: what S can do, how it explains any question in easy language, how to make your free key, and why your data stays with you.
+**[▶ Watch the full video (about 1¾ minutes)](https://17shivanshusharma.github.io/Project-S/media/project-s-explainer.mp4)**: what S can do, how every subject gets its own colour, how S explains any question in easy language, the new study mode, memory and web search, how to make your free key, and why your data stays with you.
 
 ![S intro](screenshots/intro.png)
 
 ## ✨ Features
 
-**New in this version**
+**New in v4**
+
+- **🎨 Every subject gets its own colour:** S notices the subject of a chat (maths, physics, chemistry, biology, history, geography, English/Hindi, coding, commerce) and gives *only that chat* its own theme. Maths is indigo, biology green, history amber, coding orange, and so on. A new chat starts in the normal blue. Tap the round badge at the top to pick a different subject yourself.
+- **📚 Study mode:** S becomes a tutor. It gives hints one at a time, asks you questions, and makes quizzes, flashcards and revision sheets.
+- **🧠 Memory:** say "yaad rakhna, main class 12 mein hoon" and S remembers it in every chat. See or delete what it remembers in ⚙ Settings. It stays only in your browser.
+- **🔊 Suno:** S reads any answer out loud (Hindi or English voice, built into your phone).
+- **✏️ Rename chats** and **💾 back up / restore** all chats as a file, so you can move them to a new phone. The backup never contains your API key.
+- **🔒 Stronger security:** the app can only talk to the AI providers, the maths engine download, Wikipedia and the page reader. Nothing else.
+- **📱 Smooth on Android and iPhone:** no zoom when you type on iPhone, room for the notch and home bar, bigger buttons, smooth scrolling, and fewer animations when your phone asks for reduced motion.
+
+![Every subject gets its own colour: maths, biology, history and coding](screenshots/subjects.png)
+
+| Study mode | Pick a subject | Memory + backup |
+|---|---|---|
+| ![Study mode](screenshots/study.png) | ![Subject picker](screenshots/subject-picker.png) | ![Memory and backup in Settings](screenshots/memory.png) |
+
+**From v3**
 
 - **New look:** deep navy and black with electric blue accents. A clean, distraction-free chat screen.
 - **Sidebar:** ＋ New chat, 🕘 History (with search), 📚 Library and ⚙ Settings.
@@ -57,10 +73,21 @@ S explains every answer in simple words, one small step at a time: what the ques
 
 <img src="screenshots/maths.png" alt="S solving 2x² − 5x + 3 = 0 step by step in easy Hinglish" width="340" />
 
+## 🗺️ Roadmap
+
+| Phase | Work | Status |
+|---|---|---|
+| 1 | Security + chat history + bug fixes | ✅ Done: locked-down connections (Content Security Policy), no key in backups, rename chats, backup and restore |
+| 2 | Voice + PDF + image understanding | ✅ Done: 🎤 voice typing, 🔊 read aloud, PDFs, photos and notes with Summarize / Key points / Quiz / Explain |
+| 3 | Web search + citations + memory | ✅ Done: web search, numbered sources, verified facts vs guesses, 🧠 memory |
+| 4 | Study mode + coding mode + maths | ✅ Done: 📚 Study, 💻 Coding, 🧠 Reasoning, SymPy maths engine |
+| 5 | Premium UI + mobile optimisation | ✅ Done: subject themes, navy + blue design, Android and iPhone polish |
+| 6 | Backend + authentication + deployment | 🔜 Next. Today S has no server on purpose, so nobody can see your data. A login and cloud sync need a backend account (for example Firebase or Supabase, both have free plans) owned by the project. Deployment is already done with GitHub Pages. |
+
 ## 🚀 How to use
 
-1. Download `index.html` (you can rename it to `S.html`).
-2. Open it in Chrome, Edge or any modern browser. On Android, open it from your file manager with Chrome.
+1. Open **[17shivanshusharma.github.io/Project-S](https://17shivanshusharma.github.io/Project-S/)**, or download `index.html` (you can rename it to `S.html`).
+2. Works in Chrome, Edge, Safari and Firefox. On Android use Chrome; on iPhone use Safari. Tip: "Add to Home Screen" makes it open like an app.
 3. Get a free Gemini API key:
    - Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
    - Sign in with Google and tap **Create API key**
@@ -134,6 +161,7 @@ npm run build      # writes out/S.html
 
 - `src/app.js`: chat logic, the providers (Gemini, OpenRouter, Claude), attachments, mic and storage
 - `src/sympy.js`: the SymPy maths engine (Pyodide in a Web Worker)
+- `src/subjects.js`: the subject detector and the colour theme for each subject
 - `src/search.js`: web search (Google Search via your Gemini key when allowed, otherwise Wikipedia + a free page reader)
 - `src/space.js`: the 3D starfield
 - `src/intro.js`: the black hole intro animation
@@ -147,6 +175,6 @@ Built with [marked](https://github.com/markedjs/marked), [DOMPurify](https://git
 
 ### 🇮🇳 Hinglish mein
 
-S ek AI assistant hai jo ek hi HTML file mein chalta hai. Kuch install nahi karna. File kholo, apni free Gemini key daalo ([aistudio.google.com/apikey](https://aistudio.google.com/apikey) se), aur kuch bhi poocho: maths, science, history, coding, sab kuch. Question ki photo bhejo, ya 🎤 dabake bolo. Tumhari key aur chats sirf tumhare phone mein rehti hain.
+S ek AI assistant hai jo ek hi HTML file mein chalta hai. Kuch install nahi karna. File kholo, apni free Gemini key daalo ([aistudio.google.com/apikey](https://aistudio.google.com/apikey) se), aur kuch bhi poocho: maths, science, history, coding, sab kuch. Question ki photo bhejo, ya 🎤 dabake bolo. Tumhari key aur chats sirf tumhare phone mein rehti hain. Har subject ki chat ka apna rang hota hai (maths indigo, biology hara, history sunehra, coding orange), 📚 Study mode quiz aur flashcards banata hai, aur 🧠 Memory tumhari class aur exam yaad rakhti hai. Android aur iPhone dono pe smooth chalta hai.
 
 **Made with 💜 by Shivanshu Sharma**

@@ -10,19 +10,19 @@ const preview = process.argv[2] === 'preview';
   await p.waitForTimeout(500);
   const D = await p.evaluate(() => window.DURATION);
   if (preview) {
-    for (const t of [4, 11, 24, 29, 36, 44, 57, 69, 82]) {
+    for (const t of [4, 12, 17, 20, 23, 26, 36, 47, 57, 64, 75, 86, 93, 99]) {
       await p.evaluate((t) => window.render(t), t);
       await p.screenshot({ path: `${__dirname}/prev-${t}.png` });
     }
   } else {
-    fs.mkdirSync(__dirname + '/frames2', { recursive: true });
+    fs.mkdirSync(__dirname + '/frames', { recursive: true });
     const FPS = 30;
     const from = +(process.env.FROM || 0), to = +(process.env.TO || D * FPS);
     for (let i = from; i < to; i++) {
-      const out = `${__dirname}/frames2/f${String(i).padStart(5, '0')}.jpg`;
-      if (fs.existsSync(out) && fs.statSync(out).size > 0 && fs.existsSync(`${__dirname}/frames2/f${String(i + 1).padStart(5, '0')}.jpg`)) continue;
+      const out = `${__dirname}/frames/f${String(i).padStart(5, '0')}.jpg`;
+      if (fs.existsSync(out) && fs.statSync(out).size > 0 && fs.existsSync(`${__dirname}/frames/f${String(i + 1).padStart(5, '0')}.jpg`)) continue;
       await p.evaluate((t) => window.render(t), i / FPS);
-      await p.screenshot({ path: `${__dirname}/frames2/f${String(i).padStart(5, '0')}.jpg`, type: 'jpeg', quality: 92 });
+      await p.screenshot({ path: `${__dirname}/frames/f${String(i).padStart(5, '0')}.jpg`, type: 'jpeg', quality: 92 });
     }
   }
   await b.close();

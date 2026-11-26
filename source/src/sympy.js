@@ -75,7 +75,12 @@ const waiting = new Map();
 
 function startWorker() {
   // Pyodide needs a module worker. A data: URL works everywhere, even when S.html is opened as a file.
-  worker = new Worker("data:text/javascript;charset=utf-8," + encodeURIComponent(WORKER_SOURCE), { type: "module" });
+  try {
+    worker = new Worker("data:text/javascript;charset=utf-8," + encodeURIComponent(WORKER_SOURCE), { type: "module" });
+  } catch {
+    // Some browsers (older iPhone Safari) refuse data: workers; a blob: worker works there on https pages.
+    worker = new Worker(URL.createObjectURL(new Blob([WORKER_SOURCE], { type: "text/javascript" })), { type: "module" });
+  }
   readyPromise = new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("The maths engine took too long to download. Check your internet.")), LOAD_TIMEOUT_MS);
     worker.onmessage = ({ data }) => {

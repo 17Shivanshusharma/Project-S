@@ -8,6 +8,7 @@ import { startStarfield } from "./space.js";
 import { playIntro } from "./intro.js";
 import { runSympy, sympyLoaded, SYMPY_TOOL } from "./sympy.js";
 import { WEB_TOOLS, webSearch, readWebpage } from "./search.js";
+import { SUBJECTS, detectSubject, applySubject } from "./subjects.js";
 
 const NAME = "S";
 const $ = (sel) => document.querySelector(sel);
@@ -51,8 +52,7 @@ const DEFAULT_SETTINGS = {
   webSearch: true,
   voiceLang: "en-IN",
   personality: "",
-  sympy: true,
-};
+  sympy: true, memoryOn: true };
 const saved = prefs.get("settings", {});
 if (saved.apiKey && !saved.claudeKey) saved.claudeKey = saved.apiKey; // from the first version
 delete saved.apiKey;
@@ -77,18 +77,21 @@ const MODES = {
   fast: { label: "⚡ Fast", effort: "low" },
   reasoning: { label: "🧠 Reasoning", effort: "high" },
   coding: { label: "💻 Coding", effort: "medium" },
+  study: { label: "📚 Study", effort: "medium" },
 };
 const GEMINI_FREE = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.6-flash"];
 const GEMINI_BY_MODE = {
   fast: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.6-flash", "gemini-3.8-flash"],
   reasoning: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
   coding: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
+  study: ["gemini-3.6-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
 };
 const CLAUDE_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
 const CLAUDE_BY_MODE = {
   fast: ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"],
   reasoning: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
   coding: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
+  study: ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"],
 };
 const MODEL_NAMES = {
   "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite",
@@ -110,6 +113,33 @@ const activeModel = () =>
 const searchOn = () => !!settings.webSearch;
 // The SymPy maths engine is a tool the AI calls. OpenRouter's free models don't all support tools.
 const sympyOn = () => settings.sympy && settings.provider !== "openrouter";
+
+// ---------- Memory: small facts the user wants S to remember across chats ----------
+const MEMORY_MAX = 60;
+let memory = prefs.get("memory", []);
+function saveMemory() {
+  prefs.set("memory", memory);
+}
+function rememberFact(fact) {
+  fact = String(fact || "").trim().slice(0, 300);
+  if (!fact) return "Error: empty fact.";
+  if (memory.some((m) => m.text.toLowerCase() === fact.toLowerCase())) return "Already remembered.";
+  memory.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: fact, at: Date.now() });
+  if (memory.length > MEMORY_MAX) memory = memory.slice(-MEMORY_MAX);
+  saveMemory();
+  return "Saved to memory.";
+}
+const MEMORY_TOOL = {
+  name: "save_memory",
+  description:
+    "Save one short, lasting fact about the user so you remember it in future chats (their name, class, exam, subjects, goals, how they like answers). Only call it when the user shares such a fact or asks you to remember something. Don't save passwords, keys or private details like phone numbers or addresses.",
+  parameters: { type: "object", properties: { fact: { type: "string", description: "The fact, in one short sentence, e.g. 'User is in class 12 (PCM) preparing for JEE'." } }, required: ["fact"] },
+};
+function memoryPrompt() {
+  if (!settings.memoryOn) return "";
+  const list = memory.map((m) => "- " + m.text).join("\n");
+  return `- Memory: you remember things across chats with the save_memory tool. When the user tells you a lasting fact about themselves or says "yaad rakhna"/"remember", save it and tell them briefly ("🧠 Yaad rakh liya"). ${list ? "What you already know about the user:\n" + list + "\nUse this naturally; don't repeat it back unless it helps." : ""}`;
+}
 
 function systemPrompt() {
   return `You are ${NAME}, a friendly, brilliant personal AI assistant and tutor, created by Shivanshu Sharma.
@@ -139,7 +169,8 @@ ${searchOn() ? `- You can search the web (web_search) and open links (read_webpa
   **✅ Verified (sources se):** facts the sources state, each with its source number like [1].
   **🤔 Andaza / not confirmed:** anything you're inferring or that sources don't confirm. Leave this out if there's nothing.
   The app lists the source links under your answer, so don't paste long URLs.` : "- Web search is off, so for very recent news say your information may be out of date and suggest turning on 🌐 Web search."}
-- Current mode: ${{ fast: "FAST. Keep answers short and direct (still correct and simple). No long introductions.", reasoning: "REASONING. Think carefully, break the problem down, check each step and the final answer before replying.", coding: "CODING. Write complete, runnable code in code blocks with the language tag, with short comments. Then explain how it works and how to run it, and mention edge cases." }[mode()]}
+- Current mode: ${{ fast: "FAST. Keep answers short and direct (still correct and simple). No long introductions.", reasoning: "REASONING. Think carefully, break the problem down, check each step and the final answer before replying.", coding: "CODING. Write complete, runnable code in code blocks with the language tag, with short comments. Then explain how it works and how to run it, and mention edge cases.", study: "STUDY (tutor). Teach, don't just hand over answers. Explain the idea simply, then guide the user with one hint or question at a time and let them try. When they ask, make a short quiz (MCQs with answers hidden at the end), flashcards (a table: Question | Answer) or a quick revision sheet. Praise effort and correct mistakes gently, explaining why." }[mode()]}
+${memoryPrompt()}
 ${settings.personality ? "\nExtra instructions from your owner:\n" + settings.personality : ""}`;
 }
 
@@ -187,7 +218,7 @@ const db = (() => {
     async put(chat) {
       chat.updatedAt = Date.now();
       const fileCount = chat.messages.reduce((n, m) => n + (m.attachments?.length || 0), 0);
-      const meta = { id: chat.id, title: chat.title, updatedAt: chat.updatedAt, fileCount };
+      const meta = { id: chat.id, title: chat.title, updatedAt: chat.updatedAt, fileCount, subject: chat.subject || "general" };
       await run("chats", "readwrite", (s, m) => (s ? s.put(chat) : m.set(chat.id, chat)));
       await run("meta", "readwrite", (s, m) => (s ? s.put(meta) : m.set(meta.id, meta)));
     },
@@ -382,7 +413,61 @@ function addExtras(bubble, getText, sources = []) {
     setTimeout(() => (copy.textContent = "⧉ Copy answer"), 1500);
   };
   box.appendChild(copy);
+  if ("speechSynthesis" in window) {
+    const speak = document.createElement("button");
+    speak.type = "button";
+    speak.className = "act-btn";
+    speak.textContent = "🔊 Suno";
+    speak.onclick = () => readAloud(getText(), speak);
+    box.appendChild(speak);
+  }
   msg.appendChild(box);
+}
+
+// ---------- Read aloud (speechSynthesis, built into Android and iPhone browsers) ----------
+let speakingBtn = null;
+function plainForSpeech(t) {
+  return String(t)
+    .replace(/<details class="calc">[\s\S]*?<\/details>/g, " ")
+    .replace(/```[\s\S]*?```/g, " (code) ")
+    .replace(/\$\$?([^$]+)\$\$?/g, (m, x) => x.replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "$1 by $2").replace(/\\(times|cdot)/g, " into ").replace(/\^2/g, " square").replace(/\^3/g, " cube").replace(/\\sqrt/g, " root ").replace(/[\\{}]/g, " "))
+    .replace(/\[(\d+)\]/g, "")
+    .replace(/[#*_>|`~]/g, " ")
+    .replace(/-{3,}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function readAloud(text, btn) {
+  const synth = window.speechSynthesis;
+  const was = speakingBtn;
+  synth.cancel();
+  if (was) was.textContent = "🔊 Suno";
+  speakingBtn = null;
+  if (was === btn) return; // second tap stops
+  const clean = plainForSpeech(text);
+  if (!clean) return;
+  const devanagari = /[\u0900-\u097F]/.test(clean);
+  const lang = devanagari ? "hi-IN" : settings.voiceLang === "hi-IN" ? "hi-IN" : "en-IN";
+  const voices = synth.getVoices();
+  const voice = voices.find((v) => v.lang === lang) || voices.find((v) => v.lang.startsWith(lang.slice(0, 2)));
+  // Speak in sentence-sized pieces: long texts stop early on some phones.
+  const parts = clean.match(/[^.!?।\n]{1,220}[.!?।]?/g) || [clean];
+  parts.forEach((p, i) => {
+    const u = new SpeechSynthesisUtterance(p);
+    u.lang = lang;
+    if (voice) u.voice = voice;
+    u.rate = 1;
+    if (i === parts.length - 1)
+      u.onend = u.onerror = () => {
+        if (speakingBtn === btn) {
+          btn.textContent = "🔊 Suno";
+          speakingBtn = null;
+        }
+      };
+    synth.speak(u);
+  });
+  btn.textContent = "⏹ Stop";
+  speakingBtn = btn;
 }
 
 function addMessage(role, text = "", files = []) {
@@ -439,7 +524,17 @@ async function renderSidebar() {
       if (c.id === currentChat?.id) openChat(null);
       else renderSidebar();
     };
-    item.append(a, del);
+    const ren = document.createElement("button");
+    ren.className = "del";
+    ren.type = "button";
+    ren.textContent = "✏️";
+    ren.title = "Rename chat";
+    ren.onclick = () => renameChat(c.id);
+    const dot = document.createElement("span");
+    dot.className = "subj-dot";
+    dot.style.background = (SUBJECTS[c.subject] || SUBJECTS.general).a;
+    dot.title = (SUBJECTS[c.subject] || SUBJECTS.general).label;
+    item.append(dot, a, ren, del);
     list.appendChild(item);
   }
   if (!list.children.length) {
@@ -459,7 +554,11 @@ async function openChat(id) {
   welcomeEl.hidden = false;
   currentChat = id ? (await db.get(id)) || null : null;
   $("#chat-title").textContent = currentChat?.title || "New chat";
+  nextSubject = null;
+  applySubject(currentChat?.subject || "general");
+  updateSubjectUI();
   document.body.classList.remove("side-open");
+  window.speechSynthesis?.cancel();
   if (currentChat) {
     for (const m of currentChat.messages) {
       const t = textOf(m.content);
@@ -748,10 +847,22 @@ async function send(text) {
       id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2),
       title: title.length > 48 ? title.slice(0, 48) + "…" : title,
       messages: [],
+      subject: nextSubject || "general",
+      subjectManual: !!nextSubject,
     };
+    nextSubject = null;
     $("#chat-title").textContent = currentChat.title;
   }
   const chat = currentChat;
+  // Pick this chat's subject theme from what the user writes (until they choose one themselves).
+  if (!chat.subjectManual && (!chat.subject || chat.subject === "general")) {
+    const sub = detectSubject(text + " " + files.map((f) => f.name).join(" "));
+    if (sub !== "general") {
+      chat.subject = sub;
+      applySubject(sub);
+      updateSubjectUI();
+    }
+  }
   const userMsg = { role: "user", content: text || "(see attachment)" };
   if (files.length) userMsg.attachments = files;
   chat.messages.push(userMsg);
@@ -886,9 +997,14 @@ async function runTool(name, args, ui) {
     onStatus("Thinking…");
     return text;
   }
+  if (name === MEMORY_TOOL.name) {
+    const r = rememberFact(args?.fact);
+    if (r === "Saved to memory.") toast("🧠 Memory saved: " + String(args?.fact).slice(0, 80));
+    return r;
+  }
   return "Error: unknown tool.";
 }
-const customTools = () => [...(sympyOn() ? [SYMPY_TOOL] : []), ...(searchOn() ? WEB_TOOLS : [])];
+const customTools = () => [...(sympyOn() ? [SYMPY_TOOL] : []), ...(searchOn() ? WEB_TOOLS : []), ...(settings.memoryOn ? [MEMORY_TOOL] : [])];
 // Errors where trying another model makes sense (busy, quota, missing model, network).
 const retryable = (status) => !status || [404, 408, 429, 500, 502, 503, 504, 529].includes(status);
 
@@ -1321,6 +1437,8 @@ function openSettings(note = "") {
   $("#set-voice").value = settings.voiceLang;
   $("#set-personality").value = settings.personality;
   $("#set-sympy").checked = settings.sympy;
+  $("#set-memory").checked = settings.memoryOn !== false;
+  renderMemory();
   showProviderFields();
   if (!dialog.open) dialog.showModal();
   if (!activeKey()) ({ gemini: $("#set-gkey"), openrouter: $("#set-okey"), claude: $("#set-key") })[settings.provider].focus();
@@ -1340,6 +1458,7 @@ $("#settings-form").addEventListener("submit", (e) => {
     voiceLang: $("#set-voice").value,
     personality: $("#set-personality").value.trim(),
     sympy: $("#set-sympy").checked,
+    memoryOn: $("#set-memory").checked,
     mode: settings.mode,
     v2: true,
     v3: true,
@@ -1520,6 +1639,128 @@ async function renderLibrary() {
   }
 }
 
+// ---------- Subject theme picker (changes only this chat's colours) ----------
+const subjMenu = $("#subject-menu");
+for (const [key, t] of Object.entries(SUBJECTS)) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "subj-opt";
+  b.dataset.subject = key;
+  b.innerHTML = `<i style="background:${t.a}"></i>`;
+  b.append(t.label);
+  b.onclick = async () => {
+    subjMenu.hidden = true;
+    applySubject(key);
+    if (currentChat) {
+      currentChat.subject = key;
+      currentChat.subjectManual = true;
+      if (currentChat.messages.length) await saveChat(currentChat);
+      renderSidebar();
+    } else nextSubject = key;
+    updateSubjectUI();
+  };
+  subjMenu.appendChild(b);
+}
+let nextSubject = null;
+function updateSubjectUI() {
+  const key = currentChat?.subject || nextSubject || "general";
+  $("#subject-btn").textContent = (SUBJECTS[key] || SUBJECTS.general).label.split(" ")[0];
+  $("#subject-btn").title = "Theme: " + (SUBJECTS[key] || SUBJECTS.general).label;
+  subjMenu.querySelectorAll(".subj-opt").forEach((b) => b.classList.toggle("active", b.dataset.subject === key));
+}
+$("#subject-btn").onclick = (e) => {
+  e.stopPropagation();
+  modeMenu.hidden = true;
+  subjMenu.hidden = !subjMenu.hidden;
+};
+document.addEventListener("click", (e) => {
+  if (!subjMenu.hidden && !subjMenu.contains(e.target)) subjMenu.hidden = true;
+});
+
+// ---------- Chat history tools: rename, backup, restore ----------
+async function renameChat(id) {
+  const chat = await db.get(id);
+  if (!chat) return;
+  const name = prompt("Chat ka naya naam:", chat.title);
+  if (!name || !name.trim()) return;
+  chat.title = name.trim().slice(0, 80);
+  await db.put(chat);
+  if (currentChat?.id === id) {
+    currentChat.title = chat.title;
+    $("#chat-title").textContent = chat.title;
+  }
+  renderSidebar();
+}
+$("#export-chats").onclick = async () => {
+  const metas = await db.list();
+  const chats = [];
+  for (const m of metas) {
+    const c = await db.get(m.id);
+    if (c) chats.push(c);
+  }
+  const blob = new Blob([JSON.stringify({ app: "Project S", version: 4, exportedAt: new Date().toISOString(), chats, memory }, null, 1)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `project-s-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => (URL.revokeObjectURL(a.href), a.remove()), 1000);
+  toast(`💾 Backup ready: ${chats.length} chats (API keys are NOT included).`);
+};
+$("#import-chats").onclick = () => $("#import-file").click();
+$("#import-file").onchange = async (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!Array.isArray(data.chats)) throw new Error("not a Project S backup");
+    let n = 0;
+    for (const c of data.chats) {
+      if (!c?.id || !Array.isArray(c.messages)) continue;
+      c.title = String(c.title || "Chat").slice(0, 80);
+      const keep = c.updatedAt;
+      await db.put(c);
+      n++;
+      if (keep) c.updatedAt = keep;
+    }
+    if (Array.isArray(data.memory)) for (const m of data.memory) if (m?.text) rememberFact(m.text);
+    renderMemory();
+    renderSidebar();
+    toast(`✅ ${n} chats restored.`);
+  } catch (err) {
+    toast("Couldn't restore: " + err.message);
+  }
+};
+function renderMemory() {
+  const list = $("#memory-list");
+  list.innerHTML = "";
+  if (!memory.length) {
+    const p = document.createElement("p");
+    p.className = "small";
+    p.textContent = "Abhi kuch yaad nahi. Chat mein bolo \"yaad rakhna, main class 12 mein hoon\".";
+    list.appendChild(p);
+  }
+  for (const m of memory) {
+    const row = document.createElement("div");
+    row.className = "mem-row";
+    const t = document.createElement("span");
+    t.textContent = m.text;
+    const x = document.createElement("button");
+    x.type = "button";
+    x.className = "del";
+    x.textContent = "🗑";
+    x.title = "Forget this";
+    x.onclick = () => {
+      memory = memory.filter((y) => y.id !== m.id);
+      saveMemory();
+      renderMemory();
+    };
+    row.append(t, x);
+    list.appendChild(row);
+  }
+}
+
 // ---------- Mode + model selector ----------
 const modeMenu = $("#mode-menu");
 function updateModeUI() {
@@ -1541,6 +1782,7 @@ function updateModeUI() {
 }
 $("#mode-btn").onclick = (e) => {
   e.stopPropagation();
+  subjMenu.hidden = true;
   modeMenu.hidden = !modeMenu.hidden;
 };
 document.addEventListener("click", (e) => {

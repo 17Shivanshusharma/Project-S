@@ -4,88 +4,97 @@
 <meta charset="utf-8" />
 <style>
   * { box-sizing: border-box; margin: 0; }
-  html, body { width: 720px; height: 1280px; overflow: hidden; background: #03020a; color: #efeaff;
+  html, body { width: 720px; height: 1280px; overflow: hidden; background: #02040a; color: #eaf2ff;
     font-family: Inter, system-ui, sans-serif; }
   #stars { position: absolute; inset: 0; }
   .nebula { position: absolute; inset: 0;
-    background: radial-gradient(45% 30% at 80% 15%, rgba(124,58,237,.35), transparent 70%),
-                radial-gradient(40% 30% at 10% 85%, rgba(232,121,249,.18), transparent 70%),
-                radial-gradient(50% 40% at 50% 50%, rgba(76,29,149,.22), transparent 75%); }
+    background: radial-gradient(45% 30% at 80% 15%, rgba(31,107,255,.35), transparent 70%),
+                radial-gradient(40% 30% at 10% 85%, rgba(56,189,248,.18), transparent 70%),
+                radial-gradient(50% 40% at 50% 50%, rgba(20,50,120,.22), transparent 75%); }
   .scene { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: 70px 56px; text-align: center; opacity: 0; }
-  .grad { background: linear-gradient(90deg, #fff, #f0abfc 55%, #67e8f9); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .grad { background: linear-gradient(90deg, #fff, #93c5fd 55%, #67e8f9); -webkit-background-clip: text; background-clip: text; color: transparent; }
   h1 { font-size: 64px; line-height: 1.08; font-weight: 800; letter-spacing: -0.01em; }
   h2 { font-size: 50px; line-height: 1.12; font-weight: 800; }
-  .sub { font-size: 30px; color: #c4b5fd; margin-top: 22px; line-height: 1.35; }
-  .tag { display: inline-block; font-size: 22px; letter-spacing: .25em; text-transform: uppercase; color: #a397c9; margin-bottom: 26px; }
+  .sub { font-size: 30px; color: #a8c8f8; margin-top: 22px; line-height: 1.35; }
+  .tag { display: inline-block; font-size: 22px; letter-spacing: .25em; text-transform: uppercase; color: #8fa3c7; margin-bottom: 26px; }
 
   /* black hole */
   .bh { position: relative; width: 420px; height: 340px; perspective: 900px; margin-bottom: 30px; }
   .bh .glow { position: absolute; inset: 15% 8%; border-radius: 50%; filter: blur(30px);
-    background: radial-gradient(circle, rgba(168,85,247,.7), rgba(232,121,249,.25) 45%, transparent 70%); }
+    background: radial-gradient(circle, rgba(61,139,255,.7), rgba(56,189,248,.25) 45%, transparent 70%); }
   .bh .disk { position: absolute; left: 50%; top: 50%; width: 400px; height: 400px; margin: -200px 0 0 -200px; border-radius: 50%;
-    background: conic-gradient(from 0deg, #fde68a00 0deg, #f0abfc 30deg, #a855f7 80deg, #6d28d9 140deg, #67e8f955 190deg, #c084fc 240deg, #f5d0fe 290deg, #7c3aed 330deg, #fde68a00 360deg);
+    background: conic-gradient(from 0deg, #fde68a00 0deg, #93c5fd 30deg, #3d8bff 80deg, #1f6bff 140deg, #67e8f955 190deg, #60a5fa 240deg, #dbeafe 290deg, #2563eb 330deg, #fde68a00 360deg);
     -webkit-mask: radial-gradient(circle, transparent 23%, #000 25%, #000 46%, transparent 70%);
     filter: blur(2px) saturate(1.3); transform: rotateX(72deg) rotateZ(var(--spin, 0deg)); }
   .bh .horizon { position: absolute; left: 50%; top: 50%; width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%;
-    background: radial-gradient(circle, #000 62%, #12002a 72%, transparent 74%);
-    box-shadow: 0 0 0 3px rgba(245,208,254,.9), 0 0 36px 10px rgba(168,85,247,.6), 0 0 90px 30px rgba(124,58,237,.35); }
+    background: radial-gradient(circle, #000 62%, #001033 72%, transparent 74%);
+    box-shadow: 0 0 0 3px rgba(219,234,254,.9), 0 0 36px 10px rgba(61,139,255,.6), 0 0 90px 30px rgba(31,107,255,.35); }
   .bh .lens { position: absolute; left: 50%; top: 50%; width: 172px; height: 172px; margin: -86px 0 0 -86px; border-radius: 50%;
-    border: 4px solid transparent; border-top-color: rgba(245,208,254,.9); filter: blur(2px); }
+    border: 4px solid transparent; border-top-color: rgba(219,234,254,.9); filter: blur(2px); }
 
   .chips { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin-top: 40px; }
-  .chip { font-size: 28px; padding: 14px 24px; border-radius: 999px; border: 1px solid rgba(196,181,253,.45);
-    background: rgba(18,10,38,.7); opacity: 0; }
+  .chip { font-size: 28px; padding: 14px 24px; border-radius: 999px; border: 1px solid rgba(147,197,253,.45);
+    background: rgba(8,16,36,.7); opacity: 0; }
 
   /* chat mock */
-  .phone { width: 560px; border-radius: 40px; border: 2px solid rgba(196,181,253,.45); background: rgba(8,5,20,.88);
-    box-shadow: 0 0 80px rgba(124,58,237,.35); padding: 26px 22px; text-align: left; }
-  .bar { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 700; padding-bottom: 16px; border-bottom: 1px solid rgba(167,139,250,.22); margin-bottom: 18px; }
-  .logo { width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle, #000 42%, transparent 46%), conic-gradient(#7c3aed, #f0abfc, #67e8f9, #a855f7, #4c1d95, #7c3aed); box-shadow: 0 0 16px rgba(168,85,247,.6); }
-  .u { margin-left: auto; width: fit-content; max-width: 85%; background: linear-gradient(135deg, #6d28d9, #9333ea 55%, #c026d3);
+  .phone { width: 560px; border-radius: 40px; border: 2px solid rgba(147,197,253,.45); background: rgba(4,8,20,.88);
+    box-shadow: 0 0 80px rgba(31,107,255,.35); padding: 26px 22px; text-align: left; }
+  .bar { display: flex; align-items: center; gap: 12px; font-size: 22px; font-weight: 700; padding-bottom: 16px; border-bottom: 1px solid rgba(96,165,250,.22); margin-bottom: 18px; }
+  .logo { width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle, #000 42%, transparent 46%), conic-gradient(#2563eb, #93c5fd, #67e8f9, #3d8bff, #1e3a8a, #2563eb); box-shadow: 0 0 16px rgba(61,139,255,.6); }
+  .u { margin-left: auto; width: fit-content; max-width: 85%; background: linear-gradient(135deg, #1f6bff, #3d8bff 55%, #38bdf8);
     padding: 14px 18px; border-radius: 22px 22px 6px 22px; font-size: 24px; }
-  .a { margin-top: 18px; background: rgba(14,8,30,.9); border: 1px solid rgba(167,139,250,.22); border-radius: 6px 22px 22px 22px;
+  .a { margin-top: 18px; background: rgba(6,12,28,.9); border: 1px solid rgba(96,165,250,.22); border-radius: 6px 22px 22px 22px;
     padding: 16px 18px; font-size: 21px; line-height: 1.45; min-height: 60px; white-space: pre-wrap; }
   .calc { margin: 10px 0; border: 1px solid rgba(103,232,249,.4); border-radius: 14px; padding: 10px 14px; color: #67e8f9; font-size: 20px; font-weight: 600; }
-  .calc code { display: block; color: #e9d5ff; font: 18px "DejaVu Sans Mono", monospace; margin-top: 6px; font-weight: 400; }
+  .calc code { display: block; color: #dbeafe; font: 18px "DejaVu Sans Mono", monospace; margin-top: 6px; font-weight: 400; }
   .final { color: #fff; font-weight: 800; }
 
   .feat { display: grid; gap: 22px; margin-top: 40px; width: 100%; }
   .feat div { display: flex; align-items: center; gap: 22px; text-align: left; font-size: 30px; padding: 22px 26px; border-radius: 24px;
-    border: 1px solid rgba(167,139,250,.3); background: rgba(18,10,38,.75); opacity: 0; }
+    border: 1px solid rgba(96,165,250,.3); background: rgba(8,16,36,.75); opacity: 0; }
   .feat span { font-size: 46px; }
-  .feat small { display: block; font-size: 21px; color: #a397c9; margin-top: 4px; }
+  .feat small { display: block; font-size: 21px; color: #8fa3c7; margin-top: 4px; }
 
   /* key steps */
   .steps { display: grid; gap: 22px; margin-top: 36px; width: 100%; }
   .step { display: grid; grid-template-columns: 220px 1fr; gap: 22px; align-items: center; text-align: left; opacity: 0; }
-  .shot { border-radius: 18px; overflow: hidden; background: #f5f3ff; color: #1f1335; font-size: 15px; box-shadow: 0 10px 30px rgba(0,0,0,.5); border: 2px solid rgba(196,181,253,.5); }
-  .shot .sb { background: #e4defa; padding: 7px 10px; color: #4c3d75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .shot { border-radius: 18px; overflow: hidden; background: #f3f7ff; color: #13203a; font-size: 15px; box-shadow: 0 10px 30px rgba(0,0,0,.5); border: 2px solid rgba(147,197,253,.5); }
+  .shot .sb { background: #dfe8fa; padding: 7px 10px; color: #3d4f75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .shot .bd { padding: 12px; display: grid; gap: 8px; min-height: 96px; align-content: start; }
   .shot b { font-size: 17px; }
-  .shot .f { border: 1px solid #c4b5fd; border-radius: 7px; padding: 5px 8px; background: #fff; white-space: nowrap; overflow: hidden; }
-  .shot .btn { justify-self: start; background: #6d28d9; color: #fff; border-radius: 8px; padding: 5px 12px; font-weight: 700; }
-  .shot .ln { height: 9px; border-radius: 5px; background: #d6cff0; }
+  .shot .f { border: 1px solid #a8c8f8; border-radius: 7px; padding: 5px 8px; background: #fff; white-space: nowrap; overflow: hidden; }
+  .shot .btn { justify-self: start; background: #1f6bff; color: #fff; border-radius: 8px; padding: 5px 12px; font-weight: 700; }
+  .shot .ln { height: 9px; border-radius: 5px; background: #cfdcf0; }
   .step .t { font-size: 27px; font-weight: 700; }
-  .step .d { font-size: 21px; color: #c4b5fd; margin-top: 6px; }
-  .num { color: #f0abfc; }
+  .step .d { font-size: 21px; color: #a8c8f8; margin-top: 6px; }
+  .num { color: #93c5fd; }
 
   /* privacy diagram */
   .diagram { display: grid; gap: 18px; margin-top: 40px; width: 100%; }
   .box { border-radius: 26px; padding: 24px; border: 2px solid rgba(103,232,249,.5); background: rgba(103,232,249,.07); font-size: 27px; opacity: 0; }
-  .box.you { border-color: rgba(168,85,247,.7); background: rgba(124,58,237,.14); }
-  .box small { display: block; font-size: 21px; color: #c4b5fd; margin-top: 8px; }
+  .box.you { border-color: rgba(61,139,255,.7); background: rgba(31,107,255,.14); }
+  .box small { display: block; font-size: 21px; color: #a8c8f8; margin-top: 8px; }
   .arrow { font-size: 40px; color: #67e8f9; opacity: 0; }
   .box.no { border-color: rgba(252,165,165,.6); background: rgba(252,165,165,.07); }
   .strike { text-decoration: line-through; text-decoration-color: #fca5a5; text-decoration-thickness: 4px; }
 
   .tips { display: grid; gap: 20px; margin-top: 36px; width: 100%; text-align: left; }
-  .tips div { font-size: 27px; padding: 20px 24px; border-radius: 22px; background: rgba(18,10,38,.75); border: 1px solid rgba(167,139,250,.3); opacity: 0; }
+  .tips div { font-size: 27px; padding: 20px 24px; border-radius: 22px; background: rgba(8,16,36,.75); border: 1px solid rgba(96,165,250,.3); opacity: 0; }
   .link { margin-top: 34px; font-size: 26px; white-space: nowrap; font-weight: 700; color: #fff; padding: 20px 28px; border-radius: 22px;
-    background: linear-gradient(135deg, #7c3aed, #a855f7 60%, #e879f9); box-shadow: 0 0 40px rgba(168,85,247,.6); }
-  .small { font-size: 22px; color: #a397c9; margin-top: 22px; }
-  .progress { position: absolute; left: 0; bottom: 0; height: 6px; background: linear-gradient(90deg, #7c3aed, #e879f9, #67e8f9); }
-  .flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 40%, #fff, #f5d0fe 20%, rgba(168,85,247,.6) 45%, transparent 75%); opacity: 0; }
+    background: linear-gradient(135deg, #2563eb, #3d8bff 60%, #38bdf8); box-shadow: 0 0 40px rgba(61,139,255,.6); }
+  .small { font-size: 22px; color: #8fa3c7; margin-top: 22px; }
+  .progress { position: absolute; left: 0; bottom: 0; height: 6px; background: linear-gradient(90deg, #2563eb, #38bdf8, #67e8f9); }
+  .flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 40%, #fff, #dbeafe 20%, rgba(61,139,255,.6) 45%, transparent 75%); opacity: 0; }
+  .phone.sp { transition: none; border-color: rgba(var(--rgb),.55); box-shadow: 0 0 90px rgba(var(--rgb),.45); }
+  .phone.sp .u { background: linear-gradient(135deg, var(--a2), var(--a) 60%, var(--b)); }
+  .phone.sp .bar { border-bottom-color: rgba(var(--rgb),.3); }
+  .badge { margin-left: auto; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font-size: 24px;
+    border: 1px solid rgba(var(--rgb),.6); background: rgba(var(--rgb),.18); box-shadow: 0 0 18px rgba(var(--rgb),.5); }
+  .subjname { font-size: 34px; font-weight: 800; margin-top: 26px; color: var(--b); }
+  .tint { position: absolute; inset: 0; background: radial-gradient(60% 45% at 50% 45%, rgba(var(--rgb),.28), transparent 75%); opacity: 0; }
+  .src { margin-top: 10px; font-size: 18px; color: #8fa3c7; border-top: 1px solid rgba(96,165,250,.25); padding-top: 8px; }
+  .src b { color: #93c5fd; }
 </style>
 </head>
 <body>
@@ -112,6 +121,20 @@
   </div>
 </section>
 
+
+<!-- 2b. Subject themes -->
+<div class="tint" id="tint"></div>
+<section class="scene" id="s2b">
+  <h2>Har subject ka<br /><span class="grad">apna rang.</span></h2>
+  <p class="sub" style="margin-bottom:34px">Sirf us chat ki theme badalti hai. Baaki S waisa hi.</p>
+  <div class="phone sp" id="sphone">
+    <div class="bar"><span class="logo"></span><span id="stitle">Maths chat</span><span class="badge" id="sbadge">🧮</span></div>
+    <div class="u" id="sq">2x² − 5x + 3 = 0 solve karo</div>
+    <div class="a" id="sa" style="min-height:110px"></div>
+  </div>
+  <div class="subjname" id="sname">🧮 Maths</div>
+</section>
+
 <!-- 3. Chat demo -->
 <section class="scene" id="s3">
   <div class="phone">
@@ -133,6 +156,19 @@
   </div>
 </section>
 
+
+<!-- 4n. New features -->
+<section class="scene" id="s4n">
+  <h2>Naye <span class="grad">superpowers</span></h2>
+  <div class="feat">
+    <div><span>🌐</span><p>Web search + sources<small>Latest jaankari, links ke saath. ✅ Fact alag, 🤔 andaza alag</small></p></div>
+    <div><span>📚</span><p>Study mode<small>Hints, quiz, flashcards aur revision</small></p></div>
+    <div><span>🧠</span><p>Memory<small>"Yaad rakhna, main class 12 mein hoon"</small></p></div>
+    <div><span>🔊</span><p>Suno<small>Jawab ko bol ke sunata hai</small></p></div>
+    <div><span>⚡</span><p>Fast · 🧠 Reasoning · 💻 Coding<small>Ek model fail? S khud doosra try karta hai</small></p></div>
+  </div>
+</section>
+
 <!-- 4. Features -->
 <section class="scene" id="s4">
   <h2>Aur bhi <span class="grad">bahut kuch</span></h2>
@@ -140,7 +176,8 @@
     <div><span>📷</span><p>Photo se sawaal<small>Question ki photo bhejo, S solve karega</small></p></div>
     <div><span>🎤</span><p>Bol ke poocho<small>Hindi, English ya Hinglish mein</small></p></div>
     <div><span>🧮</span><p>Asli maths engine<small>SymPy se tough maths bhi exact</small></p></div>
-    <div><span>💾</span><p>Lambi chats save<small>Hazaron chats, tumhare phone mein</small></p></div>
+    <div><span>📄</span><p>PDF aur notes<small>Summary, key points, quiz, Library mein sab files</small></p></div>
+    <div><span>💾</span><p>Chats save + backup<small>Hazaron chats, naye phone pe bhi le jao</small></p></div>
   </div>
 </section>
 
@@ -152,7 +189,7 @@
       <div><div class="t"><span class="num">1.</span> Link kholo</div><div class="d">aistudio.google.com/apikey</div></div></div>
     <div class="step"><div class="shot"><div class="sb">🔒 accounts.google.com</div><div class="bd"><b>Sign in</b><div class="f">you@gmail.com</div><div class="btn">Next</div></div></div>
       <div><div class="t"><span class="num">2.</span> Google se sign in</div><div class="d">Wahi Gmail jo phone mein hai</div></div></div>
-    <div class="step"><div class="shot"><div class="sb">🔒 aistudio.google.com/apikey</div><div class="bd"><b>API keys</b><div class="btn" style="box-shadow:0 0 0 4px rgba(168,85,247,.5)">＋ Create API key</div></div></div>
+    <div class="step"><div class="shot"><div class="sb">🔒 aistudio.google.com/apikey</div><div class="bd"><b>API keys</b><div class="btn" style="box-shadow:0 0 0 4px rgba(61,139,255,.5)">＋ Create API key</div></div></div>
       <div><div class="t"><span class="num">3.</span> "Create API key"</div><div class="d">Ek tap, key ban gayi</div></div></div>
     <div class="step"><div class="shot"><div class="sb">🔒 aistudio.google.com/apikey</div><div class="bd"><b>Your API key</b><div class="f" style="font-family:monospace">AIzaSy••••••••</div><div class="btn">Copy</div></div></div>
       <div><div class="t"><span class="num">4.</span> Copy → S mein paste</div><div class="d">Bas! S taiyaar hai 🚀</div></div></div>
@@ -178,7 +215,7 @@
     <div>🙈 <b>Key kisi ko mat do</b>, GitHub pe mat daalo.</div>
     <div>📊 Free mein roz lagbhag <b>500 messages</b>.</div>
     <div>🔁 Ek model ki limit khatam? S <b>khud doosra free model</b> try karta hai.</div>
-    <div>📲 Install kuch nahi: <b>link kholo aur chalao</b>.</div>
+    <div>📲 Android ho ya iPhone: <b>link kholo aur chalao</b>.</div>
   </div>
 </section>
 
@@ -195,9 +232,9 @@
 
 <script>
 // Deterministic timeline: render(t) draws the frame at t seconds.
-const DURATION = 85;
+const DURATION = 102;
 const SCENES = [ // id, start, end
-  ["s1", 0, 7], ["s2", 7, 15], ["s3", 15, 31], ["s3b", 31, 39], ["s4", 39, 47], ["s5", 47, 62], ["s6", 62, 72], ["s7", 72, 78], ["s8", 78, 85],
+  ["s1", 0, 7], ["s2", 7, 15], ["s2b", 15, 27], ["s3", 27, 43], ["s3b", 43, 50], ["s4n", 50, 60], ["s4", 60, 67], ["s5", 67, 81], ["s6", 81, 90], ["s7", 90, 96], ["s8", 96, 102],
 ];
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const ease = (v) => 1 - Math.pow(1 - clamp(v), 3);
@@ -206,7 +243,7 @@ const $ = (s) => document.querySelector(s);
 // stars
 const cv = $("#stars"), ctx = cv.getContext("2d");
 let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-const STARS = Array.from({ length: 260 }, () => ({ x: rnd() * 2 - 1, y: rnd() * 2 - 1, z0: rnd(), s: rnd() * 1.2 + 0.5, c: ["#fff", "#e9d5ff", "#c4b5fd", "#f5d0fe", "#bae6fd"][(rnd() * 5) | 0] }));
+const STARS = Array.from({ length: 260 }, () => ({ x: rnd() * 2 - 1, y: rnd() * 2 - 1, z0: rnd(), s: rnd() * 1.2 + 0.5, c: ["#fff", "#dbeafe", "#a8c8f8", "#dbeafe", "#bae6fd"][(rnd() * 5) | 0] }));
 function stars(t) {
   ctx.clearRect(0, 0, 1080, 1920);
   for (const st of STARS) {
@@ -249,6 +286,26 @@ function answer(p) { // p: characters shown
   return out;
 }
 
+const SUBJ = [
+  { n: "🧮 Maths", e: "🧮", t: "Maths chat", q: "2x² − 5x + 3 = 0 solve karo", a: "(2x − 3)(x − 1) = 0\n<b>✅ x = 3/2 ya x = 1</b>", a1: "#7c6cff", a2: "#5b4bf0", b: "#a5b4fc", rgb: "124,108,255" },
+  { n: "🧬 Biology", e: "🧬", t: "Biology chat", q: "Photosynthesis kya hai?", a: "Paudhe dhoop + paani + CO₂ se\n<b>apna khana (glucose)</b> banate hain 🌱", a1: "#10b981", a2: "#047857", b: "#a7f3d0", rgb: "16,185,129" },
+  { n: "📜 History", e: "📜", t: "History chat", q: "1857 ki kranti kab hui?", a: "<b>10 May 1857, Meerut</b> se shuru.\nIse pehla swatantrata sangram kehte hain.", a1: "#f59e0b", a2: "#b45309", b: "#fcd34d", rgb: "245,158,11" },
+  { n: "💻 Coding", e: "💻", t: "Coding chat", q: "Python mein even/odd?", a: "<span style=\"font-family:monospace\">if n % 2 == 0: print(\"even\")</span>\n<b>%</b> = remainder (bacha hua)", a1: "#f97316", a2: "#c2410c", b: "#fdba74", rgb: "249,115,22" },
+];
+function subjects(t) {
+  const a = 15, b = 27, on = t > a && t < b;
+  const k = clamp(Math.floor((t - a - 1.2) / 2.6), 0, 3), sb = SUBJ[k];
+  const ph = $("#sphone").style;
+  ph.setProperty("--a", sb.a1); ph.setProperty("--a2", sb.a2); ph.setProperty("--b", sb.b); ph.setProperty("--rgb", sb.rgb);
+  $("#s2b").style.setProperty("--b", sb.b);
+  $("#sbadge").textContent = sb.e; $("#stitle").textContent = sb.t; $("#sq").textContent = sb.q; $("#sname").textContent = sb.n;
+  const local = (t - a - 1.2) - k * 2.6;
+  $("#sa").innerHTML = local < 0.5 ? '<span style="color:#8fa3c7">Thinking…</span>' : sb.a;
+  $("#sa").style.opacity = clamp((local - 0.4) / 0.4) || (local < 0.5 ? 1 : 0);
+  const tint = $("#tint").style; tint.setProperty("--rgb", sb.rgb);
+  tint.opacity = on ? Math.min(ease((t - a) / 0.7), clamp((b - t) / 0.6)) : 0;
+}
+
 function render(t) {
   stars(t);
   document.querySelectorAll(".bh .disk").forEach((d) => d.style.setProperty("--spin", (t * 50) + "deg"));
@@ -261,7 +318,7 @@ function render(t) {
     el.style.visibility = o > 0 ? "visible" : "hidden";
     // stagger children
     const items = el.querySelectorAll(".chip, .feat div, .step, .box, .arrow, .tips div");
-    const gap = id === "s5" ? 2.6 : id === "s6" ? 1.4 : id === "s7" ? 1.0 : 0.35;
+    const gap = id === "s4n" ? 0.9 : id === "s5" ? 2.6 : id === "s6" ? 1.4 : id === "s7" ? 1.0 : 0.35;
     items.forEach((it, i) => {
       const v = ease((t - a - 1.0 - i * gap) / 0.6);
       it.style.opacity = v; it.style.transform = `translateY(${(1 - v) * 24}px)`;
@@ -271,8 +328,9 @@ function render(t) {
   const fl = t > 0.2 && t < 1.6 ? Math.sin(((t - 0.2) / 1.4) * Math.PI) * 0.8 : 0;
   $("#flash").style.opacity = fl;
   // chat typing
-  const q = $("#q"); q.style.opacity = ease((t - 15.6) / 0.5);
-  $("#ans").innerHTML = t < 17 ? (t > 16.3 ? '<span style="color:#a397c9">Thinking…</span>' : "") : answer((t - 17) * 24);
+  const q = $("#q"); q.style.opacity = ease((t - 27.6) / 0.5);
+  $("#ans").innerHTML = t < 29 ? (t > 28.3 ? '<span style="color:#8fa3c7">Thinking…</span>' : "") : answer((t - 29) * 24);
+  subjects(t);
   $("#prog").style.width = (t / DURATION) * 100 + "%";
 }
 window.render = render; window.DURATION = DURATION;
