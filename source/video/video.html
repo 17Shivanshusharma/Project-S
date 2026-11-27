@@ -106,7 +106,7 @@
   <div class="bh"><div class="glow"></div><div class="disk"></div><div class="horizon"></div><div class="lens"></div></div>
   <span class="tag">by Shivanshu Sharma</span>
   <h1>PROJECT <span class="grad">S</span></h1>
-  <p class="sub">Free Hinglish AI for Students</p>
+  <p class="sub">Think. Learn. Create. Grow.</p>
 </section>
 <div class="flash" id="flash"></div>
 
@@ -219,6 +219,19 @@
   </div>
 </section>
 
+<!-- 7b. V2 -->
+<section class="scene" id="s7b">
+  <span class="tag">New</span>
+  <h2>Project S <span class="grad">V2</span></h2>
+  <div class="feat">
+    <div><span>🧭</span><p>8 modes<small>Normal, Fast, Reasoning, Coding, Study, Maths, Research, Writing</small></p></div>
+    <div><span>📈</span><p>Maths graphs<small>SymPy se asli graph, chat mein hi</small></p></div>
+    <div><span>🗣</span><p>Voice chat<small>Bolo, S jawab bol ke sunayega</small></p></div>
+    <div><span>↻</span><p>Edit · Regenerate · Retry<small>Sawaal badlo, naya jawab lo</small></p></div>
+    <div><span>⭐</span><p>Library<small>Saved answers, notes, files · Word (.docx) bhi</small></p></div>
+  </div>
+</section>
+
 <!-- 8. CTA -->
 <section class="scene" id="s8">
   <div class="bh" style="transform:scale(.7);margin-bottom:0"><div class="glow"></div><div class="disk"></div><div class="horizon"></div><div class="lens"></div></div>
@@ -232,9 +245,9 @@
 
 <script>
 // Deterministic timeline: render(t) draws the frame at t seconds.
-const DURATION = 102;
+const DURATION = 113;
 const SCENES = [ // id, start, end
-  ["s1", 0, 7], ["s2", 7, 15], ["s2b", 15, 27], ["s3", 27, 43], ["s3b", 43, 50], ["s4n", 50, 60], ["s4", 60, 67], ["s5", 67, 81], ["s6", 81, 90], ["s7", 90, 96], ["s8", 96, 102],
+  ["s1", 0, 7], ["s2", 7, 15], ["s2b", 15, 27], ["s3", 27, 43], ["s3b", 43, 50], ["s4n", 50, 60], ["s4", 60, 67], ["s5", 67, 81], ["s6", 81, 90], ["s7", 90, 96], ["s7b", 96, 107], ["s8", 107, 113],
 ];
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const ease = (v) => 1 - Math.pow(1 - clamp(v), 3);
@@ -318,7 +331,7 @@ function render(t) {
     el.style.visibility = o > 0 ? "visible" : "hidden";
     // stagger children
     const items = el.querySelectorAll(".chip, .feat div, .step, .box, .arrow, .tips div");
-    const gap = id === "s4n" ? 0.9 : id === "s5" ? 2.6 : id === "s6" ? 1.4 : id === "s7" ? 1.0 : 0.35;
+    const gap = id === "s4n" || id === "s7b" ? 0.9 : id === "s5" ? 2.6 : id === "s6" ? 1.4 : id === "s7" ? 1.0 : 0.35;
     items.forEach((it, i) => {
       const v = ease((t - a - 1.0 - i * gap) / 0.6);
       it.style.opacity = v; it.style.transform = `translateY(${(1 - v) * 24}px)`;
