@@ -21,6 +21,7 @@ import hlBash from "highlight.js/lib/languages/bash";
 import hlJson from "highlight.js/lib/languages/json";
 import { readDocx } from "./docx.js";
 import { drawGraph } from "./graph.js";
+import { pdfDocument, makePdf, printDoc } from "./pdf.js";
 import { WEB_TOOLS, webSearch, readWebpage } from "./search.js";
 import { SUBJECTS, detectSubject, applySubject } from "./subjects.js";
 
@@ -230,6 +231,7 @@ How to answer:
 - Use Markdown (headings, bullet lists, tables, code blocks with a language tag) when it makes the answer easier to read.
 - If you're not sure about something, say so instead of guessing.
 - About yourself: you were made by Shivanshu Sharma. If anyone asks who made you, who created you or who your owner is, say Shivanshu Sharma made you. If anyone asks "who is Shivanshu Sharma?", answer that Shivanshu Sharma is the one who made you (in the user's language, e.g. "Shivanshu Sharma ne mujhe banaya hai"). If someone asks which AI model powers you, say S is built by Shivanshu Sharma and currently runs on ${({ gemini: "Google Gemini", openrouter: "free models from OpenRouter", claude: "Anthropic's Claude" })[settings.provider]}.
+${settings.provider !== "openrouter" ? `- You CAN make PDF files. When the user asks for a PDF (notes, worksheet, question paper, report, letter, summary, anything), call create_pdf with a good title and the full content in Markdown (headings, lists, tables, LaTeX maths all work). The user gets a Download PDF button. Never say you can't make PDFs. After calling it, reply with one short line only.` : `- If the user asks for a PDF, write the full content as your answer and tell them to tap "📄 PDF" under your answer to download it as a PDF file.`}
 ${sympyOn() ? `- You have a maths engine: the run_sympy tool runs Python with SymPy and returns exact results. Use it for any calculation that isn't trivial (equations and systems, integrals, derivatives, limits, series, differential equations, matrices, simplifying, factorising, big or precise arithmetic) and to double-check final answers. You can call it several times. If it returns an error, fix the code and try again. After using it, still explain the method step by step in normal maths (LaTeX) the way a teacher would, and don't paste the code into your answer: the user can already see it.` : ""}
 ${searchOn() ? `- You can search the web (web_search) and open links (read_webpage). Search for anything recent or time-sensitive (news, prices, results, dates, people's current roles) and for facts you're unsure about. To summarise several websites, read each one, then combine.
 - When you used the web, keep facts and guesses clearly apart:
@@ -391,6 +393,57 @@ hljs.registerAliases(["c++"], { languageName: "cpp" });
 hljs.registerAliases(["sh", "shell"], { languageName: "bash" });
 const LANG_NAMES = { python: "Python", javascript: "JavaScript", typescript: "TypeScript", xml: "HTML", css: "CSS", java: "Java", c: "C", cpp: "C++", sql: "SQL", bash: "Shell", json: "JSON" };
 
+// ---------- PDF export ----------
+let pdfBusy = false;
+async function exportPdf(title, blocks, btn) {
+  if (pdfBusy) return;
+  pdfBusy = true;
+  const label = btn?.textContent;
+  const doc = pdfDocument(title, blocks);
+  try {
+    const { pages } = await makePdf(title, doc, (i, n) => {
+      if (btn) btn.textContent = `⏳ Page ${i}/${n}…`;
+    });
+    toast(`📄 PDF ready (${pages} page${pages > 1 ? "s" : ""}). Downloads folder mein dekho.`);
+  } catch (err) {
+    console.warn("PDF drawing failed, using print instead", err);
+    toast("Is browser mein seedha PDF nahi ban paayi. Print screen khul rahi hai: wahan \"Save as PDF\" chuno.");
+    printDoc(pdfDocument(title, blocks), title);
+  } finally {
+    pdfBusy = false;
+    if (btn) btn.textContent = label;
+  }
+}
+// The answer's HTML without buttons, for PDFs.
+function answerHtml(msg) {
+  const c = msg.querySelector(".bubble").cloneNode(true);
+  c.querySelectorAll("button, .error").forEach((x) => x.remove());
+  // A PDF card becomes its document: title + content.
+  c.querySelectorAll(".pdf-card").forEach((card) => {
+    const box = document.createElement("div");
+    const h = document.createElement("h2");
+    h.textContent = card.querySelector(".pdf-card-head b")?.textContent || "";
+    box.append(h, ...card.querySelector(".pdf-preview").childNodes);
+    card.replaceWith(box);
+  });
+  const src = msg.querySelector(".sources");
+  return c.innerHTML + (src ? `<div class="sources">${src.innerHTML}</div>` : "");
+}
+async function chatPdf() {
+  if (!currentChat?.messages.length) return toast("Pehle kuch poocho, phir chat ki PDF banao.");
+  const blocks = [];
+  let q = "";
+  for (const m of messagesEl.querySelectorAll(".msg")) {
+    if (m.classList.contains("user")) q = m.querySelector(".bubble")?.innerText.trim() || "";
+    else if (m.classList.contains("assistant")) {
+      blocks.push({ question: q, html: answerHtml(m) });
+      q = "";
+    }
+  }
+  if (q) blocks.push({ question: q });
+  exportPdf(currentChat.title, blocks, $("#chat-pdf"));
+}
+
 function decorate(el) {
   // Graphs drawn by the maths engine
   el.querySelectorAll("pre > code.language-s-graph").forEach((code) => {
@@ -400,6 +453,62 @@ function decorate(el) {
     } catch {
       pre.remove();
     }
+  });
+  // PDF cards made by the create_pdf tool
+  el.querySelectorAll("pre > code.language-s-pdf").forEach((code) => {
+    const pre = code.parentElement;
+    let d;
+    try {
+      d = JSON.parse(code.textContent);
+    } catch {
+      return pre.remove();
+    }
+    const card = document.createElement("div");
+    card.className = "pdf-card";
+    const head = document.createElement("div");
+    head.className = "pdf-card-head";
+    const icon = document.createElement("span");
+    icon.className = "pdf-icon";
+    icon.textContent = "PDF";
+    const t = document.createElement("div");
+    const b = document.createElement("b");
+    b.textContent = d.title;
+    const small = document.createElement("small");
+    small.textContent = `${Math.max(1, Math.round(d.content.split(/\s+/).length))} words · A4`;
+    t.append(b, small);
+    head.append(icon, t);
+    const prev = document.createElement("div");
+    prev.className = "pdf-preview collapsed";
+    prev.innerHTML = renderMarkdown(d.content);
+    decorate(prev);
+    const acts = document.createElement("div");
+    acts.className = "lib-acts";
+    const dl = document.createElement("button");
+    dl.type = "button";
+    dl.className = "chip-btn primary-chip";
+    dl.textContent = "⬇ Download PDF";
+    dl.onclick = () => exportPdf(d.title, [{ html: prev.innerHTML }], dl);
+    const pr = document.createElement("button");
+    pr.type = "button";
+    pr.className = "chip-btn";
+    pr.textContent = "🖨 Print";
+    pr.onclick = () => printDoc(pdfDocument(d.title, [{ html: prev.innerHTML }]), d.title);
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "chip-btn";
+    more.textContent = "👁 Preview";
+    more.onclick = () => prev.classList.toggle("collapsed");
+    const save = document.createElement("button");
+    save.type = "button";
+    save.className = "chip-btn";
+    save.textContent = "⭐ Library";
+    save.onclick = async () => {
+      await db.putNote({ id: newId(), type: "note", title: d.title, text: d.content, createdAt: Date.now() });
+      save.textContent = "✓ Saved";
+    };
+    acts.append(dl, pr, more, save);
+    card.append(head, prev, acts);
+    pre.replaceWith(card);
   });
   // Code colours + language label
   el.querySelectorAll("pre > code").forEach((code) => {
@@ -559,6 +668,16 @@ function addExtras(bubble, getText, sources = []) {
     }
   };
   box.appendChild(save);
+  const pdfBtn = document.createElement("button");
+  pdfBtn.type = "button";
+  pdfBtn.className = "act-btn";
+  pdfBtn.textContent = "📄 PDF";
+  pdfBtn.title = "Download this answer as a PDF";
+  pdfBtn.onclick = () => {
+    const q = msg.previousElementSibling?.classList.contains("user") ? msg.previousElementSibling.querySelector(".bubble")?.innerText.trim() : "";
+    exportPdf((q || "Project S answer").replace(/\s+/g, " ").slice(0, 70), [{ question: q, html: answerHtml(msg) }], pdfBtn);
+  };
+  box.appendChild(pdfBtn);
   const regen = document.createElement("button");
   regen.type = "button";
   regen.className = "act-btn regen-btn";
@@ -572,6 +691,14 @@ const cleanAnswer = (t) =>
   String(t)
     .replace(/<details class="calc">[\s\S]*?<\/details>\s*/g, "")
     .replace(/```s-graph[\s\S]*?```\s*/g, "")
+    .replace(/```s-pdf\n([\s\S]*?)\n```/g, (m, j) => {
+      try {
+        const d = JSON.parse(j);
+        return `# ${d.title}\n\n${d.content}`;
+      } catch {
+        return "";
+      }
+    })
     .trim();
 
 // ---------- Read aloud (speechSynthesis, built into Android and iPhone browsers) ----------
@@ -581,6 +708,7 @@ function plainForSpeech(t) {
   return String(t)
     .replace(/<details class="calc">[\s\S]*?<\/details>/g, " ")
     .replace(/```s-graph[\s\S]*?```/g, " (graph) ")
+    .replace(/```s-pdf[\s\S]*?```/g, " (PDF ready) ")
     .replace(/```[\s\S]*?```/g, " (code) ")
     .replace(/\$\$?([^$]+)\$\$?/g, (m, x) => x.replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "$1 by $2").replace(/\\(times|cdot)/g, " into ").replace(/\^2/g, " square").replace(/\^3/g, " cube").replace(/\\sqrt/g, " root ").replace(/[\\{}]/g, " "))
     .replace(/\[(\d+)\]/g, "")
@@ -807,6 +935,7 @@ async function openChat(id) {
   $("#chat-title").textContent = currentChat?.title || "New chat";
   nextSubject = null;
   applySubject(themeFor(currentChat?.subject));
+  $("#chat-pdf").hidden = !currentChat?.messages.length;
   updateSubjectUI();
   document.body.classList.remove("side-open");
   window.speechSynthesis?.cancel();
@@ -1332,6 +1461,7 @@ async function answer(chat, userMsg, removed) {
     controller = null;
     setBusy(false);
     renderSidebar();
+    $("#chat-pdf").hidden = !chat.messages.length || showingLibrary();
     if (voiceMode) {
       if (full && !failed) readAloud(full, null, () => voiceMode && listenForVoice());
       else stopVoiceMode();
@@ -1380,6 +1510,13 @@ async function runTool(name, args, ui) {
     onText("\n\n```s-graph\n" + JSON.stringify({ title: String(args?.title || "").slice(0, 80), series: ok }) + "\n```\n\n");
     return `Graph shown to the user under your answer (${ok.map((x) => x.label).join(", ")}, x from ${args?.xmin ?? -10} to ${args?.xmax ?? 10}). Don't describe drawing it; just refer to it.`;
   }
+  if (name === PDF_TOOL.name) {
+    const title = String(args?.title || "Project S notes").slice(0, 100);
+    const content = String(args?.content || "").trim();
+    if (!content) return "Error: the PDF has no content. Call create_pdf again with the full content.";
+    onText("\n\n```s-pdf\n" + JSON.stringify({ title, content }) + "\n```\n\n");
+    return `PDF "${title}" is ready: the user sees a card with a Download PDF button under your reply. Reply with one short line; don't repeat the content.`;
+  }
   if (name === MEMORY_TOOL.name) {
     const r = rememberFact(args?.fact);
     if (r === "Saved to memory.") toast("🧠 Memory saved: " + String(args?.fact).slice(0, 80));
@@ -1387,7 +1524,19 @@ async function runTool(name, args, ui) {
   }
   return "Error: unknown tool.";
 }
-const customTools = () => [...(sympyOn() ? [SYMPY_TOOL, PLOT_TOOL] : []), ...(searchOn() ? WEB_TOOLS : []), ...(settings.memoryOn ? [MEMORY_TOOL] : [])];
+const PDF_TOOL = {
+  name: "create_pdf",
+  description: "Make a PDF file for the user to download: notes, worksheets, question papers, reports, letters, summaries. Give the complete content in Markdown (headings, lists, tables and LaTeX maths like $x^2$ work).",
+  parameters: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "Title shown at the top and used as the file name" },
+      content: { type: "string", description: "The full document in Markdown" },
+    },
+    required: ["title", "content"],
+  },
+};
+const customTools = () => [PDF_TOOL, ...(sympyOn() ? [SYMPY_TOOL, PLOT_TOOL] : []), ...(searchOn() ? WEB_TOOLS : []), ...(settings.memoryOn ? [MEMORY_TOOL] : [])];
 // Errors where trying another model makes sense (busy, quota, missing model, network).
 const retryable = (status) => !status || [404, 408, 429, 500, 502, 503, 504, 529].includes(status);
 
@@ -1945,6 +2094,7 @@ $("#composer").addEventListener("submit", (e) => {
 });
 stopBtn.onclick = () => controller?.abort();
 $("#new-chat").onclick = () => openChat(null);
+$("#chat-pdf").onclick = () => chatPdf();
 $("#open-settings").onclick = () => openSettings();
 document.querySelectorAll(".suggestions button").forEach((b) => (b.onclick = () => send(b.dataset.q || b.textContent)));
 const wide = () => matchMedia("(min-width: 761px)").matches;
@@ -1972,8 +2122,10 @@ toBottom.onclick = () => messagesEl.scrollTo({ top: messagesEl.scrollHeight, beh
 $("#close-side").onclick = $("#scrim").onclick = () => document.body.classList.remove("side-open");
 
 // ---------- Sidebar views: History (chat list) and Library (all uploaded files) ----------
+const showingLibrary = () => !$("#library").hidden;
 function showView(view) {
   const lib = view === "library";
+  $("#chat-pdf").hidden = lib || !currentChat?.messages.length;
   $("#library").hidden = !lib;
   messagesEl.hidden = lib;
   $("#composer").hidden = lib;
@@ -2264,7 +2416,8 @@ async function renderNotes(list, q) {
         if (await db.get(n.chatId)) openChat(n.chatId);
         else toast("Wo chat ab nahi hai (delete ho gayi).");
       });
-    btn("⬇ Export", () => download(safeName(n.title) + ".md", `# ${n.title}\n\n${n.text}\n`));
+    btn("📄 PDF", (e) => exportPdf(n.title, [{ html: renderMarkdown(n.text) }], e.currentTarget));
+    btn("⬇ .md", () => download(safeName(n.title) + ".md", `# ${n.title}\n\n${n.text}\n`));
     btn("🗑 Delete", async () => {
       if (!confirm(`"${n.title}" delete karein?`)) return;
       await db.delNote(n.id);

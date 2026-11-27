@@ -18,6 +18,16 @@ S is a space-themed AI chat app that runs entirely in your browser. There is not
 
 ## ✨ Features
 
+### 📄 New: PDF maker
+
+- **Ask S for a PDF:** "Newton ke laws ki notes ki PDF bana do", "is chapter ka question paper PDF mein do"… S makes the document and shows a card with **⬇ Download PDF**, 🖨 Print, 👁 Preview and ⭐ save to Library. (Gemini and Claude. With OpenRouter, S writes the content and you tap 📄 PDF under the answer.)
+- **📄 PDF button** under every answer, a **📄 button in the top bar** for the whole chat, and **📄 PDF** on every note and saved answer in the Library.
+- Real A4 `.pdf` files, made inside your browser (nothing is uploaded). Hindi, Hinglish, emoji, maths formulas, tables and graphs all come out right. If a browser can't draw the pages, S opens the print screen, where you choose "Save as PDF".
+
+| PDF card in chat | The downloaded PDF |
+|---|---|
+| <img src="screenshots/pdf.png" alt="PDF card in a chat" width="300" /> | <img src="screenshots/pdf-page.png" alt="First page of a PDF made by S" width="340" /> |
+
 ### 🚀 New in V2
 
 ![Project S V2 on a laptop](screenshots/desktop.png)
@@ -191,6 +201,7 @@ npm run build      # writes out/S.html
 - `src/sympy.js`: the SymPy maths engine (Pyodide in a Web Worker)
 - `src/docx.js`: reads Word (.docx) files in the browser (no library)
 - `src/graph.js`: draws SymPy graphs as SVG
+- `src/pdf.js`: makes A4 PDF files in the browser (pages drawn as images, packed into a PDF; print fallback)
 - `src/subjects.js`: the subject detector and the colour theme for each subject
 - `src/search.js`: web search (Google Search via your Gemini key when allowed, otherwise Wikipedia + a free page reader)
 - `src/space.js`: the 3D starfield
