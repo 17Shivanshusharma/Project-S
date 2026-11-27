@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src https://generativelanguage.googleapis.com https://openrouter.ai https://api.anthropic.com https://cdn.jsdelivr.net https://en.wikipedia.org https://r.jina.ai; object-src 'none'; base-uri 'none'; frame-src 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; worker-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src https://generativelanguage.googleapis.com https://openrouter.ai https://api.anthropic.com https://cdn.jsdelivr.net https://en.wikipedia.org https://r.jina.ai https://*.workers.dev; object-src 'none'; base-uri 'none'; frame-src 'none'" />
   <meta name="referrer" content="no-referrer" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <meta name="color-scheme" content="dark" />
@@ -55,6 +55,7 @@
       <button id="close-side" class="icon-btn only-mobile" aria-label="Close menu">✕</button>
     </div>
     <button id="new-chat" class="new-chat">＋ New chat</button>
+    <button id="temp-chat" type="button" class="link-btn temp-link" title="Ye chat save nahi hogi, memory use nahi hogi">🕶 Temporary chat</button>
     <nav class="side-nav" aria-label="Menu">
       <button type="button" class="nav-item active" id="nav-history">🕘 Chat history</button>
       <button type="button" class="nav-item" id="nav-library">📚 Library</button>
@@ -68,6 +69,7 @@
       <button type="button" class="nav-item mode-link" data-mode="writing">✍️ Writing</button>
     </nav>
     <input id="chat-search" type="search" placeholder="🔍 Search conversations…" autocomplete="off" aria-label="Search conversations" />
+    <select id="folder-filter" aria-label="Folder" hidden></select>
     <nav id="chat-list" aria-label="Conversations"></nav>
     <nav class="side-nav side-bottom" aria-label="More">
       <button type="button" class="nav-item" id="open-settings">⚙ Settings</button>
@@ -81,7 +83,8 @@
     <header class="top">
       <button id="open-side" class="icon-btn" aria-label="Open menu">☰</button>
       <h1 id="chat-title">New chat</h1>
-      <button id="chat-pdf" type="button" class="subj-btn pdf-top" title="Is chat ki PDF download karo" aria-label="Download this chat as PDF" hidden>📄</button>
+      <button id="chat-pdf" type="button" class="subj-btn pdf-top" title="Is chat ko download karo (PDF, Markdown, JSON)" aria-label="Download this chat" hidden>📄</button>
+      <div id="export-menu" class="export-menu" hidden><p class="menu-label">Is chat ko download karo</p><button type="button" data-kind="pdf">📄 PDF</button><button type="button" data-kind="md">📝 Markdown (.md)</button><button type="button" data-kind="json">🗂 JSON</button></div>
       <div class="subj-wrap">
         <button id="subject-btn" type="button" class="subj-btn" aria-haspopup="true" title="Theme">💬</button>
         <div id="subject-menu" hidden><p class="menu-label">Subject theme (sirf is chat ka)</p></div>
@@ -215,6 +218,9 @@
           <option value="gemini-3.8-flash">Gemini 3.8 Flash (smarter, only about 20 free/day)</option>
         </select>
         <p class="small">If one model's free limit runs out, S automatically tries the other free Gemini models.</p>
+        <label for="set-gproxy">Apna server (optional, advanced)</label>
+        <input id="set-gproxy" type="url" placeholder="https://s-proxy.yourname.workers.dev" autocomplete="off" spellcheck="false" />
+        <p class="small">Agar tumne apna Cloudflare Worker banaya hai (GitHub pe <b>backend/</b> folder), to uska URL yahan do. Tab key tumhare server pe rehti hai, is phone pe nahi, aur upar key khaali chhod sakte ho. Sirf <b>https://….workers.dev</b> URL chalega.</p>
       </div>
 
       <div id="openrouter-fields" hidden>
@@ -252,8 +258,12 @@
         </select>
       </div>
       
+      <label class="check"><input id="set-sources" type="checkbox" /> 🔗 Har fact ke saath real source</label>
+      <p class="small">S pehle web search karega aur sirf asli search results ke link dega (AI khud link nahi banayega). Har jawab ke neeche "source check" dikhega, aur 🔍 se tum check kar sakte ho ki page khulta hai aur usme wahi baat hai. Jahan source nahi mila, wahan ⚠ likha aayega.</p>
       <label class="check"><input id="set-web" type="checkbox" /> 🌐 Web search (sources ke saath)</label>
       <p class="small">Gemini: Google Search agar tumhari key pe allowed ho (free keys pe aksar nahi hota), warna Wikipedia + website reader. Claude: Claude ka apna web search. 🔎 Research mode mein search hamesha on rehta hai.</p>
+      <label class="check"><input id="set-autotitle" type="checkbox" /> ✏️ AI chat ka naam khud rakhe</label>
+      <p class="small">Pehle jawab ke baad ek chhoti request se chat ka naam banta hai (tumhari key ki limit se 1 request).</p>
       <label class="check"><input id="set-sympy" type="checkbox" /> 🧮 Maths engine (SymPy) + graphs</label>
       <p class="small">S hard maths SymPy se exact solve karta hai aur graph banata hai, tumhare browser ke andar. Pehli baar ek hi baar (about 15 MB) download hota hai. Gemini aur Claude ke saath chalta hai.</p>
       </section>
@@ -294,7 +304,7 @@
       </div>
       <label for="set-rate">Bolne ki speed: <span id="rate-val">1.0×</span></label>
       <input id="set-rate" type="range" min="0.6" max="1.6" step="0.1" />
-      <button type="button" id="test-voice" class="btn small-btn">▶ Awaaz suno</button>
+      <div class="key-tools"><button type="button" id="test-voice" class="btn small-btn">▶ Awaaz suno</button><button type="button" id="test-mic" class="btn small-btn">🎤 Mic test</button><span id="mic-status" class="key-status" role="status"></span></div>
       <p class="small">Mic sirf tab chalta hai jab tum 🎤 ya 🗣 dabate ho. Awaazein tumhare phone/browser ki hoti hain.</p>
       </section>
 
@@ -309,6 +319,8 @@
       <section id="sec-privacy" class="set-sec">
       <h3>🔒 Privacy, security &amp; storage</h3>
       <p class="small">🔑 Tumhari API keys sirf isi browser mein (localStorage) save hoti hain. Hamara koi server nahi hai. Par dhyaan rakho: browser storage poori tarah "secure" nahi hota. Is phone ko use karne wala ya koi bura browser extension key dekh sakta hai. Isliye: key kisi ko mat do, GitHub pe mat daalo, aur Google AI Studio mein key ko sirf "Generative Language API" tak restrict kar do. Key leak ho jaye to delete karke nayi bana lo. <button type="button" class="link-btn open-privacy">Privacy note</button></p>
+      <label class="check"><input id="set-keepkeys" type="checkbox" /> 🔑 Keys is device pe yaad rakho</label>
+      <p class="small">Off karoge to key sirf tab tak rahegi jab tak ye tab khula hai (band karte hi hat jaayegi, har baar dobara paste karni hogi). Shared ya school ke phone/computer pe off rakho. Sabse safe tareeka: apna server (Settings → AI → "Apna server").</p>
       <p class="small" id="storage-info">Storage: checking…</p>
       <label>Chat backup</label>
       <div class="backup-row">

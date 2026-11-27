@@ -18,6 +18,17 @@ S is a space-themed AI chat app that runs entirely in your browser. There is not
 
 ## ✨ Features
 
+### 🔗 New in V2.1: real sources, safer and more reliable
+
+- **Every fact with a real source:** S searches first and cites only links that came back from its own search, never links the AI makes up. Under each answer a **source check** shows how many real sources there are, flags wrong `[n]` numbers and links the AI typed itself, and warns "⚠ source nahi mila" when there is none. **🔍 Links check karo** opens each page and checks that it really talks about the same thing.
+- **More reliable:** time limits, one automatic retry, half answers kept, no double sending, Stop always works.
+- **Chats:** 📁 folders, search inside messages, export as PDF / Markdown / JSON, AI-written chat titles, long chats summarised instead of forgotten.
+- **Privacy:** memory never saves phone numbers, passwords, keys, ID or bank details; Undo for every memory; 🕶 Temporary chat; keys can be kept only for the open tab; optional own server ([docs/BACKEND.md](docs/BACKEND.md)) so the Gemini key never touches the phone.
+- **Safer backups and files:** restore checks the file and merges without deleting anything; fake or empty files are caught; PDF page count and 🔒 locked-PDF warning; 🎤 Mic test.
+- Full report with exactly what was tested: [docs/V2.1-REPORT.md](docs/V2.1-REPORT.md).
+
+<img src="screenshots/sources-check.png" alt="Source check under an answer" width="320" />
+
 ### 📄 New: PDF maker
 
 - **Ask S for a PDF:** "Newton ke laws ki notes ki PDF bana do", "is chapter ka question paper PDF mein do"… S makes the document and shows a card with **⬇ Download PDF**, 🖨 Print, 👁 Preview and ⭐ save to Library. (Gemini and Claude. With OpenRouter, S writes the content and you tap 📄 PDF under the answer.)
@@ -114,6 +125,7 @@ S explains every answer in simple words, one small step at a time: what the ques
 | 4 | Study mode + coding mode + maths | ✅ Done: 📚 Study, 💻 Coding, 🧠 Reasoning, SymPy maths engine |
 | 5 | Premium UI + mobile optimisation | ✅ Done: subject themes, navy + blue design, Android and iPhone polish |
 | V2 | Full upgrade: 8 modes, graphs, voice chat, Library, personalization | ✅ Done (see "New in V2") |
+| V2.1 | Real sources + source check, reliability, folders, memory privacy, safe backups, file checks | ✅ Done ([report](docs/V2.1-REPORT.md)) |
 | 6 | Backend + authentication + deployment | 🔜 Next. Today S has no server on purpose, so nobody can see your data. A login and cloud sync need a backend account (for example Firebase or Supabase, both have free plans) owned by the project. Deployment is already done with GitHub Pages. |
 
 ## 🚀 How to use
@@ -163,8 +175,11 @@ S shows this same guide on the first screen. You can open it again anytime from 
   - Never share your key and **never commit it to GitHub**.
   - In Google AI Studio / Google Cloud, restrict the key to the "Generative Language API" only.
   - If a key leaks, delete it and create a new one. In S use ⚙ Settings → 🗑 Remove key.
-- The page has a Content Security Policy, so it can only talk to the AI providers, the maths engine download (jsDelivr), Wikipedia and the page reader (r.jina.ai).
-- Backups never contain your keys.
+- The page has a Content Security Policy, so it can only talk to the AI providers, the maths engine download (jsDelivr), Wikipedia, the page reader (r.jina.ai) and your own `*.workers.dev` server.
+- Backups never contain your keys (if a key was pasted into a chat, the backup replaces it with "[API key removed]").
+- **🔑 Keys is device pe yaad rakho** can be turned off: then the key lasts only until the tab is closed. Use this on shared phones or computers.
+- **Own server (optional):** [`backend/worker.js`](backend/worker.js) is a small Cloudflare Worker that keeps the Gemini key as a server secret, with origin, model, size and rate limits. See [docs/BACKEND.md](docs/BACKEND.md). It is built and tested locally but not deployed for you.
+- Memory never saves phone numbers, emails, passwords, API keys, ID numbers, bank details or addresses.
 - A server that keeps one shared key safely (with rate limits and logins) is possible, but it needs a backend account. GitHub Pages can only host static files, so that is Phase 6.
 
 ## 💻 S in many programming languages

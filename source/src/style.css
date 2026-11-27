@@ -774,3 +774,26 @@ dialog input[type=search], .lib-row input { background: rgba(2, 6, 15, 0.9); col
 .msg-extras { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .msg-extras .sources { flex-basis: 100%; }
 .msg-extras .act-btn { white-space: nowrap; }
+
+/* v6: source check, export menu, folders, temp chat */
+.src-check { width: 100%; border: 1px dashed rgba(var(--accent2-rgb), 0.35); border-radius: 14px; padding: 8px 12px; font-size: 13px; background: rgba(2, 6, 15, 0.45); }
+.src-check p { margin: 2px 0 6px; }
+.src-check .ok { color: #bbf7d0; }
+.src-check .warn { color: #fde68a; }
+.src-check .act-btn { margin-top: 2px; }
+.src-results { margin: 8px 0 4px; padding-left: 20px; }
+.src-results li { margin: 3px 0; color: var(--muted); }
+.src-results li.ok { color: #bbf7d0; }
+.src-results li.warn { color: #fde68a; }
+.src-results li.bad { color: #fca5a5; }
+.toast-act { margin-left: 8px; font: inherit; font-weight: 600; color: #0b1020; background: #cfe3ff; border: 0; border-radius: 8px; padding: 3px 10px; cursor: pointer; }
+.export-menu { position: absolute; top: calc(100% - 4px); right: 12px; z-index: 41; width: 220px; padding: 8px; border-radius: 14px;
+  background: #070e20; border: 1px solid rgba(var(--accent-rgb), 0.4); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6); }
+.export-menu button { display: block; width: 100%; text-align: left; font: inherit; font-size: 14px; color: var(--text); background: none; border: 0; border-radius: 10px; padding: 9px 10px; cursor: pointer; }
+.export-menu button:hover { background: rgba(var(--accent-rgb), 0.15); }
+#folder-filter { width: 100%; margin-top: 6px; font: inherit; font-size: 13.5px; color: var(--text); background: rgba(2, 6, 15, 0.7); border: 1px solid rgba(var(--accent-rgb), 0.3); border-radius: 10px; padding: 7px 8px; }
+.temp-link { display: block; margin: 6px auto 0; font-size: 13px; }
+body.temp-mode #chat-title { color: #fde68a; }
+body.temp-mode #composer { box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.45); }
+.tray-item span small { display: block; color: var(--muted); font-size: 11px; }
+#test-mic + .key-status, #mic-status { flex-basis: 100%; }

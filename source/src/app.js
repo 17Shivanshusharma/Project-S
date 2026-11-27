@@ -77,6 +77,11 @@ const DEFAULT_SETTINGS = {
   subjectThemes: true,
   voiceName: "",
   voiceRate: 1,
+  // v6
+  alwaysSources: true, // every fact with a real source
+  autoTitle: true, // AI writes a short chat title
+  keepKeys: true, // false = keys only until the tab is closed
+  geminiProxy: "", // own server (Cloudflare Worker) that holds the Gemini key
 };
 const saved = prefs.get("settings", {});
 if (saved.apiKey && !saved.claudeKey) saved.claudeKey = saved.apiKey; // from the first version
@@ -99,9 +104,30 @@ if (!saved.v5) {
   saved.v5 = true;
 }
 let settings = { ...DEFAULT_SETTINGS, ...saved };
-const saveSettings = () => prefs.set("settings", settings);
-const activeKey = () =>
-  ({ gemini: settings.geminiKey, openrouter: settings.openrouterKey, claude: settings.claudeKey })[settings.provider];
+const KEY_NAMES = ["geminiKey", "openrouterKey", "claudeKey"];
+// "Don't keep keys on this device": keys live in sessionStorage and vanish when the tab closes.
+if (settings.keepKeys === false) {
+  try {
+    Object.assign(settings, JSON.parse(sessionStorage.getItem("s-ai:keys") || "{}"));
+  } catch {}
+}
+function saveSettings() {
+  if (settings.keepKeys === false) {
+    const keys = Object.fromEntries(KEY_NAMES.map((k) => [k, settings[k] || ""]));
+    try {
+      sessionStorage.setItem("s-ai:keys", JSON.stringify(keys));
+    } catch {}
+    return prefs.set("settings", { ...settings, ...Object.fromEntries(KEY_NAMES.map((k) => [k, ""])) });
+  }
+  try {
+    sessionStorage.removeItem("s-ai:keys");
+  } catch {}
+  return prefs.set("settings", settings);
+}
+const activeKey = () => keyFor(settings.provider);
+// Gemini can also run through the user's own server, which keeps the key off the device.
+const geminiBase = () => (settings.geminiProxy ? settings.geminiProxy.replace(/\/+$/, "") : "https://generativelanguage.googleapis.com");
+const geminiHeaders = () => (settings.geminiProxy ? { "Content-Type": "application/json" } : { "Content-Type": "application/json", "x-goog-api-key": settings.geminiKey });
 // Smart model selector: each mode has a preferred order; if one model fails, the next is tried.
 const MODES = {
   normal: { label: "💬 Normal", desc: "Roz ke sawaal, balanced jawab", effort: "medium" },
@@ -154,7 +180,7 @@ const claudeEffort = () => (settings.effort && settings.effort !== "auto" ? sett
 const activeModel = () =>
   ({ gemini: MODEL_NAMES[geminiOrder()[0]], openrouter: "OpenRouter free models", claude: MODEL_NAMES[claudeOrder()[0]] })[settings.provider];
 // Web search costs extra on Gemini, so S only searches when Claude is the brain.
-const searchOn = () => !!settings.webSearch || mode() === "research";
+const searchOn = () => !!settings.webSearch || !!settings.alwaysSources || mode() === "research";
 // The SymPy maths engine is a tool the AI calls. OpenRouter's free models don't all support tools.
 const sympyOn = () => settings.sympy && settings.provider !== "openrouter";
 
@@ -164,9 +190,26 @@ let memory = prefs.get("memory", []);
 function saveMemory() {
   prefs.set("memory", memory);
 }
+// Memory never keeps private details, even if the AI tries to save them.
+const SENSITIVE = [
+  [/\b(?:\+?91[\s-]?)?[6-9]\d{9}\b|\b\d{3}[\s-]\d{3}[\s-]\d{4}\b/, "phone number"],
+  [/[\w.+-]+@[\w-]+\.[\w.]+/, "email address"],
+  [/pass(word|code)|\bpwd\b|\botp\b|\bpin\b|\bcvv\b/i, "password / PIN / OTP"],
+  [/AIza[0-9A-Za-z_-]{10,}|sk-[A-Za-z0-9_-]{8,}|api[\s_-]?key/i, "API key"],
+  [/aadh?aar|\bpan\b(?:\s*card)?|passport|\b\d{4}\s?\d{4}\s?\d{4}\b/i, "ID number"],
+  [/\b(?:\d[ -]?){13,19}\b|ifsc|account\s*(no|number)|bank\s*account|upi/i, "bank / card details"],
+  [/\b(address|ghar ka pata|pin\s*code|flat no|house no)\b/i, "home address"],
+];
+function sensitiveKind(text) {
+  for (const [re, kind] of SENSITIVE) if (re.test(text)) return kind;
+  return "";
+}
 function rememberFact(fact) {
   fact = String(fact || "").trim().slice(0, 300);
   if (!fact) return "Error: empty fact.";
+  if (currentChat?.temp) return "Not saved: this is a temporary chat, so nothing is remembered.";
+  const kind = sensitiveKind(fact);
+  if (kind) return `Not saved: it looks like private information (${kind}). Memory never stores phone numbers, emails, passwords, keys, ID or bank details, or addresses. Tell the user you didn't save it.`;
   if (memory.some((m) => m.text.toLowerCase() === fact.toLowerCase())) return "Already remembered.";
   memory.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: fact, at: Date.now() });
   if (memory.length > MEMORY_MAX) memory = memory.slice(-MEMORY_MAX);
@@ -180,11 +223,13 @@ const MEMORY_TOOL = {
   parameters: { type: "object", properties: { fact: { type: "string", description: "The fact, in one short sentence, e.g. 'User is in class 12 (PCM) preparing for JEE'." } }, required: ["fact"] },
 };
 function memoryPrompt() {
+  if (currentChat?.temp) return "- This is a TEMPORARY chat: you can't save or use memory here, and the chat isn't kept.";
   if (!settings.memoryOn) return "";
   const list = memory.map((m) => "- " + m.text).join("\n");
   return `- Memory: you remember things across chats with the save_memory tool. When the user tells you a lasting fact about themselves or says "yaad rakhna"/"remember", save it and tell them briefly ("🧠 Yaad rakh liya"). ${list ? "What you already know about the user:\n" + list + "\nUse this naturally; don't repeat it back unless it helps." : ""}`;
 }
 
+let chatSummary = "";
 function modePrompt() {
   const lvl = LEVELS[settings.level] || "Beginner";
   return {
@@ -233,6 +278,8 @@ How to answer:
 - About yourself: you were made by Shivanshu Sharma. If anyone asks who made you, who created you or who your owner is, say Shivanshu Sharma made you. If anyone asks "who is Shivanshu Sharma?", answer that Shivanshu Sharma is the one who made you (in the user's language, e.g. "Shivanshu Sharma ne mujhe banaya hai"). If someone asks which AI model powers you, say S is built by Shivanshu Sharma and currently runs on ${({ gemini: "Google Gemini", openrouter: "free models from OpenRouter", claude: "Anthropic's Claude" })[settings.provider]}.
 ${settings.provider !== "openrouter" ? `- You CAN make PDF files. When the user asks for a PDF (notes, worksheet, question paper, report, letter, summary, anything), call create_pdf with a good title and the full content in Markdown (headings, lists, tables, LaTeX maths all work). The user gets a Download PDF button. Never say you can't make PDFs. After calling it, reply with one short line only.` : `- If the user asks for a PDF, write the full content as your answer and tell them to tap "📄 PDF" under your answer to download it as a PDF file.`}
 ${sympyOn() ? `- You have a maths engine: the run_sympy tool runs Python with SymPy and returns exact results. Use it for any calculation that isn't trivial (equations and systems, integrals, derivatives, limits, series, differential equations, matrices, simplifying, factorising, big or precise arithmetic) and to double-check final answers. You can call it several times. If it returns an error, fix the code and try again. After using it, still explain the method step by step in normal maths (LaTeX) the way a teacher would, and don't paste the code into your answer: the user can already see it.` : ""}
+${settings.alwaysSources ? `- SOURCES (the user turned on "every fact with a real source"): for every factual statement (facts, dates, numbers, names, news, definitions, history, science facts), search first and cite it with [n] from web_search / read_webpage results only. NEVER invent a source, URL, book, website name or quote, and never cite from memory. If you didn't search or found nothing for a claim, mark it "⚠ (no source found: general knowledge, please verify)". For a calculation, write "Source: calculation" (or "Source: SymPy calculation" only if run_sympy actually ran). Code, opinions, advice and creative writing don't need sources. If search isn't working, say so honestly. If your search tool adds citations by itself, don't type [n] numbers yourself.` : ""}
+- FILES: when the user attaches a PDF or document, answer only from what it says. For a summary, give section-wise points (mention page numbers when you can see them). For a question, quote the exact line it comes from. If the file doesn't contain the answer, say so clearly instead of guessing.
 ${searchOn() ? `- You can search the web (web_search) and open links (read_webpage). Search for anything recent or time-sensitive (news, prices, results, dates, people's current roles) and for facts you're unsure about. To summarise several websites, read each one, then combine.
 - When you used the web, keep facts and guesses clearly apart:
   **✅ Verified (sources se):** facts the sources state, each with its source number like [1].
@@ -241,7 +288,7 @@ ${searchOn() ? `- You can search the web (web_search) and open links (read_webpa
 - Current mode: ${modePrompt()}
 ${personalPrompt()}
 ${memoryPrompt()}
-${settings.personality ? "\nExtra instructions from your owner:\n" + settings.personality : ""}`;
+${settings.personality ? "\nExtra instructions from your owner:\n" + settings.personality : ""}${chatSummary ? "\n\nThis is a long conversation. The oldest messages are no longer included; here is a summary of them:\n" + chatSummary : ""}`;
 }
 
 // =====================================================================
@@ -288,7 +335,7 @@ const db = (() => {
     async put(chat, touch = true) {
       if (touch || !chat.updatedAt) chat.updatedAt = Date.now();
       const fileCount = chat.messages.reduce((n, m) => n + (m.attachments?.length || 0), 0);
-      const meta = { id: chat.id, title: chat.title, updatedAt: chat.updatedAt, fileCount, subject: chat.subject || "general", pinned: !!chat.pinned };
+      const meta = { id: chat.id, title: chat.title, updatedAt: chat.updatedAt, fileCount, subject: chat.subject || "general", pinned: !!chat.pinned, folder: chat.folder || "" };
       await run("chats", "readwrite", (s, m) => (s ? s.put(chat) : m.set(chat.id, chat)));
       await run("meta", "readwrite", (s, m) => (s ? s.put(meta) : m.set(meta.id, meta)));
     },
@@ -314,6 +361,7 @@ const db = (() => {
 })();
 
 async function saveChat(chat) {
+  if (chat.temp) return true; // temporary chat: kept only on screen
   try {
     await db.put(chat);
     return true;
@@ -568,12 +616,23 @@ let controller = null;
 let pendingFiles = []; // attachments waiting to be sent
 let stars = null; // the background starfield
 
-function toast(text) {
+function toast(text, actionLabel, action) {
   const t = $("#toast");
   t.textContent = text;
+  if (actionLabel) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "toast-act";
+    b.textContent = actionLabel;
+    b.onclick = () => {
+      t.hidden = true;
+      action();
+    };
+    t.append(" ", b);
+  }
   t.hidden = false;
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => (t.hidden = true), 6000);
+  toast.timer = setTimeout(() => (t.hidden = true), actionLabel ? 9000 : 6000);
 }
 
 function attachmentChips(files) {
@@ -595,6 +654,107 @@ function attachmentChips(files) {
     }
   }
   return wrap;
+}
+
+// ---------- Source check: are the sources in this answer real? ----------
+// Real sources = links that came back from S's own web search / page reader (or Claude's search),
+// never links the AI typed itself. This checks the answer against that list.
+const normUrl = (u) => String(u || "").toLowerCase().replace(/^https?:\/\/(www\.)?/, "").replace(/[#?].*$/, "").replace(/\/+$/, "");
+function citeCheck(text, sources) {
+  const body = String(text || "")
+    .replace(/<details[\s\S]*?<\/details>/g, " ")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`[^`]*`/g, " ")
+    .replace(/\$\$[\s\S]*?\$\$/g, " ");
+  const refs = [...body.matchAll(/\[(\d{1,2})\](?!\()/g)].map((m) => +m[1]);
+  const bad = [...new Set(refs.filter((n) => n < 1 || n > sources.length))];
+  const used = [...new Set(refs.filter((n) => n >= 1 && n <= sources.length))];
+  const known = sources.map((x) => normUrl(x.url)).filter(Boolean);
+  const urls = [...new Set((body.match(/https?:\/\/[^\s)\]>"'<]+/g) || []).map((u) => u.replace(/[.,;:!?]+$/, "")))];
+  const foreign = urls.filter((u) => !known.some((k) => normUrl(u) === k || normUrl(u).startsWith(k + "/") || k.startsWith(normUrl(u) + "/")));
+  const calc = /<details class="calc">/.test(text);
+  const prose = body.replace(/\s+/g, " ").trim().length;
+  return { used, bad, foreign, calc, prose };
+}
+// Sentences that cite source n, as a set of meaningful words
+function citedWords(text, n) {
+  const body = cleanAnswer(String(text || ""));
+  const sentences = body.split(/(?<=[.!?।])\s+|\n+/).filter((x) => x.includes(`[${n}]`));
+  const stop = new Set("about after also because before being between could every first from have into just like more most only other over same some such than that their them then there these they this those through very what when where which while with would your hota hain kyunki lekin aur".split(" "));
+  const words = new Set();
+  for (const x of sentences) for (const w of x.toLowerCase().match(/[\p{L}\p{N}]{5,}/gu) || []) if (!stop.has(w)) words.add(w);
+  return [...words].slice(0, 40);
+}
+function sourceCheckBox(text, sources) {
+  const r = citeCheck(text, sources);
+  if (!sources.length && !settings.alwaysSources && !r.foreign.length && !r.bad.length) return null;
+  const box = document.createElement("div");
+  box.className = "src-check";
+  const line = (cls, t) => {
+    const p = document.createElement("p");
+    p.className = cls;
+    p.textContent = t;
+    box.appendChild(p);
+    return p;
+  };
+  if (sources.length) {
+    line("ok", `✅ ${sources.length} real source${sources.length > 1 ? "s" : ""}: ye links S ke web search se aaye hain (AI ne khud nahi banaye).` + (r.used.length ? ` Jawab mein ${r.used.length} ka [n] number use hua.` : ""));
+  } else if (settings.alwaysSources && r.prose > 250 && !r.calc) {
+    line("warn", "⚠ Is jawab ke liye koi web source nahi mila. Ye AI ki apni general knowledge hai, zaroori baat ho to verify kar lena.");
+  }
+  if (r.calc) line("ok", "🧮 Calculation SymPy se hui (upar box mein code aur result hai).");
+  if (r.bad.length) line("warn", `⚠ ${r.bad.map((n) => `[${n}]`).join(" ")}: is number ka koi source list mein nahi hai. Us baat ko source wali mat samjho.`);
+  if (r.foreign.length) line("warn", `⚠ Ye link${r.foreign.length > 1 ? "s" : ""} jawab mein hai par search se nahi aaya (AI ne khud likha, galat ho sakta hai): ${r.foreign.slice(0, 5).join(" , ")}`);
+  if (sources.length) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "act-btn";
+    btn.textContent = "🔍 Links check karo";
+    btn.title = "Har source page kholke dekho ki wo khulta hai aur usme wahi baat hai";
+    btn.onclick = () => verifyLinks(text, sources, box, btn);
+    box.appendChild(btn);
+  }
+  return box;
+}
+async function verifyLinks(text, sources, box, btn) {
+  btn.disabled = true;
+  btn.textContent = "⏳ Checking…";
+  const list = document.createElement("ol");
+  list.className = "src-results";
+  box.querySelector(".src-results")?.remove();
+  box.appendChild(list);
+  let opened = 0;
+  for (const [i, x] of sources.slice(0, 8).entries()) {
+    const li = document.createElement("li");
+    li.textContent = `${x.title.slice(0, 60)}: checking…`;
+    list.appendChild(li);
+    const r = await readWebpage(x.url, AbortSignal.timeout(25000)).catch((e) => ({ text: "Error: " + e.message }));
+    if (/^Error:/.test(r.text)) {
+      li.className = "bad";
+      li.textContent = `✗ [${i + 1}] Page nahi khula (site ne block kiya ya internet nahi). Khud khol ke dekh lo.`;
+      continue;
+    }
+    opened++;
+    const words = citedWords(text, i + 1);
+    const page = r.text.toLowerCase();
+    const hit = words.filter((w) => page.includes(w)).length;
+    if (!words.length) {
+      li.className = "ok";
+      li.textContent = `✓ [${i + 1}] Page khula (jawab mein iska number use nahi hua).`;
+    } else if (hit / words.length >= 0.4) {
+      li.className = "ok";
+      li.textContent = `✓ [${i + 1}] Page khula, aur jawab ki baat ke ${hit}/${words.length} words page pe mile.`;
+    } else {
+      li.className = "warn";
+      li.textContent = `⚠ [${i + 1}] Page khula, par jawab ki baat ke sirf ${hit}/${words.length} words page pe mile. Khud padh ke check karo.`;
+    }
+  }
+  const note = document.createElement("p");
+  note.className = "small";
+  note.textContent = `${opened}/${Math.min(8, sources.length)} pages khule. Words match hone ka matlab ye hai ki page usi topic pe hai; 100% guarantee nahi ki har baat sahi hai.`;
+  list.after(note);
+  btn.textContent = "🔍 Dobara check karo";
+  btn.disabled = false;
 }
 
 // Under each answer: a Copy button and the source links (when S searched the web).
@@ -628,6 +788,8 @@ function addExtras(bubble, getText, sources = []) {
     src.appendChild(ol);
     box.appendChild(src);
   }
+  const check = sourceCheckBox(getText(), sources || []);
+  if (check) box.appendChild(check);
   const copy = document.createElement("button");
   copy.type = "button";
   copy.className = "act-btn";
@@ -856,11 +1018,28 @@ async function renderSidebar() {
   const list = $("#chat-list");
   list.innerHTML = "";
   const q = $("#chat-search").value.trim().toLowerCase();
+  const folder = folderFilter();
+  const folders = [...new Set(chats.map((c) => c.folder).filter(Boolean))].sort();
+  const fsel = $("#folder-filter");
+  fsel.replaceChildren(
+    new Option("📂 All chats", ""),
+    ...folders.map((f) => new Option("📁 " + f, f)),
+  );
+  fsel.value = folders.includes(folder) ? folder : "";
+  fsel.hidden = !folders.length;
+  // Search titles, and inside the messages too
+  const inside = new Set();
+  if (q.length >= 3)
+    for (const c of chats) {
+      if (c.title.toLowerCase().includes(q)) continue;
+      const full = await db.get(c.id).catch(() => null);
+      if (full?.messages.some((m) => textOf(m.content).toLowerCase().includes(q))) inside.add(c.id);
+    }
   const day = 864e5;
   const today = new Date().setHours(0, 0, 0, 0);
   const groupOf = (c) =>
     c.pinned ? "📌 Pinned" : c.updatedAt >= today ? "Today" : c.updatedAt >= today - day ? "Yesterday" : c.updatedAt >= today - 7 * day ? "Previous 7 days" : c.updatedAt >= today - 30 * day ? "Previous 30 days" : "Older";
-  const shown = chats.filter((c) => !q || c.title.toLowerCase().includes(q));
+  const shown = chats.filter((c) => (!q || c.title.toLowerCase().includes(q) || inside.has(c.id)) && (!fsel.value || c.folder === fsel.value));
   shown.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updatedAt - a.updatedAt);
   let lastGroup = "";
   for (const c of shown) {
@@ -895,6 +1074,7 @@ async function renderSidebar() {
     const pin = mk(c.pinned ? "📌" : "📍", c.pinned ? "Unpin chat" : "Pin chat", () => pinChat(c.id));
     if (c.pinned) pin.classList.add("on");
     const ren = mk("✏️", "Rename chat", () => renameChat(c.id));
+    const fold = mk("📁", c.folder ? `Folder: ${c.folder} (change)` : "Move to folder", () => moveToFolder(c.id, folders));
     const del = mk("🗑", "Delete chat", async () => {
       if (!confirm(`"${c.title}" delete karein? Ye wapas nahi aayegi.`)) return;
       await db.del(c.id);
@@ -905,7 +1085,7 @@ async function renderSidebar() {
     dot.className = "subj-dot";
     dot.style.background = (SUBJECTS[c.subject] || SUBJECTS.general).a;
     dot.title = (SUBJECTS[c.subject] || SUBJECTS.general).label;
-    item.append(dot, a, pin, ren, del);
+    item.append(dot, a, pin, fold, ren, del);
     list.appendChild(item);
   }
   if (!shown.length) {
@@ -916,6 +1096,18 @@ async function renderSidebar() {
   }
   $("#model-info").textContent = `${BRAIN_NAMES[settings.provider]} · ${activeModel()} · ${chats.length} chats`;
   updateModeUI();
+}
+const folderFilter = () => $("#folder-filter")?.value || "";
+async function moveToFolder(id, folders) {
+  const chat = id === currentChat?.id ? currentChat : await db.get(id);
+  if (!chat) return;
+  const hint = folders.length ? `\nFolders: ${folders.join(", ")}` : "";
+  const name = prompt(`Folder ka naam likho (naya ya purana). Khaali chhodo to folder se bahar.${hint}`, chat.folder || "");
+  if (name == null) return;
+  chat.folder = name.trim().slice(0, 40);
+  await db.put(chat, false);
+  toast(chat.folder ? `📁 "${chat.folder}" folder mein daal di` : "Folder se bahar nikal di");
+  renderSidebar();
 }
 async function pinChat(id) {
   const chat = id === currentChat?.id ? currentChat : await db.get(id);
@@ -932,6 +1124,8 @@ async function openChat(id) {
   messagesEl.querySelectorAll(".msg").forEach((m) => m.remove());
   welcomeEl.hidden = false;
   currentChat = id ? (await db.get(id)) || null : null;
+  tempNext = false;
+  document.body.classList.remove("temp-mode");
   $("#chat-title").textContent = currentChat?.title || "New chat";
   nextSubject = null;
   applySubject(themeFor(currentChat?.subject));
@@ -1021,38 +1215,77 @@ function fileText(f) {
 }
 const TEXT_EXT = /\.(txt|md|csv|json|js|ts|py|java|c|cpp|h|html|css|xml|yml|yaml|sql|sh|log)$/i;
 
+const latin1 = (buf) => new TextDecoder("latin1").decode(buf);
+async function headOf(file, n = 1024) {
+  return new Uint8Array(await file.slice(0, n).arrayBuffer());
+}
+// Basic facts about a PDF without opening it fully: page count (when readable) and password lock.
+function pdfInfo(bytes) {
+  const s = latin1(bytes);
+  const pages = (s.match(/\/Type\s*\/Page(?![s\w])/g) || []).length;
+  return { pages, locked: /\/Encrypt\b/.test(s) };
+}
+const sizeText = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1e3)) + " KB");
 async function addFiles(fileList) {
   for (const file of fileList) {
     if (pendingFiles.length >= 10) {
       toast("Up to 10 attachments per message.");
       break;
     }
+    if (!file.size) {
+      toast(`${file.name}: ye file khaali hai (0 bytes).`);
+      continue;
+    }
     try {
       if (file.type.startsWith("image/")) {
-        const { mime, data } = await shrinkImage(file);
+        if (file.size > 30e6) {
+          toast(`${file.name} is too big (max 30 MB photo).`);
+          continue;
+        }
+        const { mime, data } = await shrinkImage(file).catch(() => {
+          throw new Error("photo khul nahi paayi (shayad HEIC ya kharab file). JPG/PNG try karo");
+        });
         pendingFiles.push({ kind: "image", mime, data, name: file.name || "photo.jpg" });
       } else if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) {
         if (file.size > MAX_FILE_MB * 1e6) {
           toast(`${file.name} is too big (max ${MAX_FILE_MB} MB).`);
           continue;
         }
+        const head = latin1(await headOf(file));
+        if (!head.includes("%PDF")) {
+          toast(`${file.name}: ye asli PDF nahi lagti (file kharab hai ya naam galat hai).`);
+          continue;
+        }
+        const info = pdfInfo(new Uint8Array(await file.arrayBuffer()));
+        if (info.locked) toast(`🔒 ${file.name} password/lock wali PDF hai. AI shayad isko padh na paaye.`);
         const data = (await readAs(file, "dataurl")).split(",")[1];
-        pendingFiles.push({ kind: "pdf", mime: "application/pdf", data, name: file.name });
+        pendingFiles.push({ kind: "pdf", mime: "application/pdf", data, name: file.name, size: file.size, pages: info.pages || undefined, locked: info.locked || undefined });
       } else if (/\.docx$/i.test(file.name) || file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
         if (file.size > MAX_FILE_MB * 1e6) {
           toast(`${file.name} is too big (max ${MAX_FILE_MB} MB).`);
           continue;
         }
-        const text = await readDocx(file);
+        const head = await headOf(file, 4);
+        if (head[0] !== 0x50 || head[1] !== 0x4b) {
+          toast(`${file.name}: ye asli Word (.docx) file nahi lagti. Purani .doc file ho to Word mein "Save as .docx" karo.`);
+          continue;
+        }
+        const text = await readDocx(file).catch(() => {
+          throw new Error("Word file ka text nahi nikal paaye (file kharab ho sakti hai)");
+        });
         if (!text.trim()) {
           toast(`${file.name}: is Word file mein koi text nahi mila (shayad sirf photos hain).`);
           continue;
         }
-        pendingFiles.push({ kind: "text", mime: "text/plain", text: text.slice(0, MAX_TEXT), name: file.name });
+        pendingFiles.push({ kind: "text", mime: "text/plain", text: text.slice(0, MAX_TEXT), name: file.name, size: file.size });
         if (text.length > MAX_TEXT) toast(`${file.name} is very long; S kept the first ${Math.round(MAX_TEXT / 1000)}k characters.`);
       } else if (file.type.startsWith("text/") || TEXT_EXT.test(file.name)) {
         if (file.size > MAX_FILE_MB * 1e6) {
           toast(`${file.name} is too big (max ${MAX_FILE_MB} MB).`);
+          continue;
+        }
+        if ((await headOf(file, 4096)).includes(0)) {
+          toast(`${file.name}: isme text nahi, binary data hai. S photo, PDF, Word aur text files padh sakta hai.`);
           continue;
         }
         let text = await readAs(file, "text");
@@ -1060,13 +1293,13 @@ async function addFiles(fileList) {
           text = text.slice(0, MAX_TEXT) + "\n…(file cut off here)";
           toast(`${file.name} is very long; S kept the first ${Math.round(MAX_TEXT / 1000)}k characters.`);
         }
-        pendingFiles.push({ kind: "text", mime: "text/plain", text, name: file.name });
+        pendingFiles.push({ kind: "text", mime: "text/plain", text, name: file.name, size: file.size });
       } else {
         toast(`${file.name}: S can read photos, PDF, Word (.docx), TXT and Markdown files.`);
       }
     } catch (err) {
       console.error(err);
-      toast(`Couldn't read ${file.name}.`);
+      toast(`Couldn't read ${file.name}${err?.message && !/^\w+Error$/.test(err.name) ? ": " + err.message : ""}.`);
     }
   }
   renderPending();
@@ -1085,7 +1318,13 @@ function renderPending() {
       item.appendChild(img);
     } else {
       const s = document.createElement("span");
-      s.textContent = (f.kind === "pdf" ? "📄 " : "📝 ") + f.name;
+      s.textContent = (f.kind === "pdf" ? (f.locked ? "🔒 " : "📄 ") : "📝 ") + f.name;
+      const meta = [f.size ? sizeText(f.size) : "", f.pages ? `${f.pages} page${f.pages > 1 ? "s" : ""}` : "", f.kind === "text" && f.text ? `${Math.round(f.text.length / 1000)}k chars` : ""].filter(Boolean).join(" · ");
+      if (meta) {
+        const m = document.createElement("small");
+        m.textContent = meta;
+        s.appendChild(m);
+      }
       item.appendChild(s);
     }
     const x = document.createElement("button");
@@ -1224,9 +1463,22 @@ function fitHistory(messages, budget) {
     start = i;
   }
   while (start < messages.length && messages[start].role !== "user") start++;
+  // The dropped messages are not lost: their questions go into the system prompt as a short summary.
+  chatSummary = start > 0 ? summarize(messages.slice(0, start)) : "";
   return { msgs: messages.slice(start), trimmed: start > 0 };
 }
 
+function summarize(old) {
+  const lines = [];
+  for (const m of old) {
+    const t = textOf(m.content).replace(/\s+/g, " ").trim();
+    if (!t) continue;
+    lines.push(m.role === "user" ? `- User asked: ${t.slice(0, 220)}` : `  S answered: ${cleanAnswer(t).replace(/\s+/g, " ").slice(0, 160)}`);
+  }
+  let out = lines.join("\n");
+  if (out.length > 6000) out = "…\n" + out.slice(-6000);
+  return out;
+}
 // Which message indexes still get their attachments re-sent
 function fileTurns(msgs) {
   const keep = new Set();
@@ -1243,16 +1495,41 @@ const fileNote = (files) => `[Earlier attached: ${files.map((f) => f.name).join(
 // =====================================================================
 const BRAINS = ["gemini", "openrouter", "claude"];
 const BRAIN_NAMES = { gemini: "Gemini", openrouter: "OpenRouter", claude: "Claude" };
-const keyFor = (b) => ({ gemini: settings.geminiKey, openrouter: settings.openrouterKey, claude: settings.claudeKey })[b];
+function keyFor(b) {
+  return { gemini: settings.geminiKey || settings.geminiProxy, openrouter: settings.openrouterKey, claude: settings.claudeKey }[b];
+}
 const ASK = { gemini: (c, ui) => askGemini(c, ui), openrouter: (c, ui) => askOpenRouter(c, ui), claude: (c, ui) => askClaude(c, ui) };
 function shortReason(err) {
   const m = err instanceof FreeError ? err.message : friendlyError(err);
   return m.split(/[.\n]/)[0].slice(0, 90);
 }
 
+// Stops double-taps and runaway sending: at least 1.2 s between messages, at most 20 a minute.
+const sendLog = [];
+function rateLimit() {
+  const now = Date.now();
+  while (sendLog.length && now - sendLog[0] > 60000) sendLog.shift();
+  if (sendLog.length >= 20) return { msg: `Ek minute mein 20 messages ho gaye. ${Math.ceil((60000 - (now - sendLog[0])) / 1000)} second ruko, phir bhejo.` };
+  const wait = sendLog.length ? Math.max(0, 1200 - (now - sendLog.at(-1))) : 0;
+  sendLog.push(now + wait);
+  return { wait };
+}
+let sending = false;
+let tempNext = false;
 async function send(text) {
   text = text.trim();
-  if ((!text && !pendingFiles.length) || controller) return;
+  if ((!text && !pendingFiles.length) || controller || sending) return;
+  const limit = rateLimit();
+  if (limit.msg) return toast("⏳ " + limit.msg);
+  sending = true; // taps while this message is on its way are ignored
+  try {
+    if (limit.wait) await sleep(limit.wait);
+    return await sendNow(text);
+  } finally {
+    sending = false;
+  }
+}
+async function sendNow(text) {
   if (!activeKey()) {
     openSettings("Paste your API key first, then send your message again.");
     return;
@@ -1271,7 +1548,10 @@ async function send(text) {
       messages: [],
       subject: nextSubject || "general",
       subjectManual: !!nextSubject,
+      ...(tempNext ? { temp: true } : {}),
+      ...(folderFilter() ? { folder: folderFilter() } : {}),
     };
+    tempNext = false;
     nextSubject = null;
     $("#chat-title").textContent = currentChat.title;
   }
@@ -1300,7 +1580,7 @@ async function send(text) {
 // Ask again for the last question (removes the old answer first).
 async function regenerate() {
   const chat = currentChat;
-  if (!chat || controller) return;
+  if (!chat || controller || sending) return;
   let i = chat.messages.length - 1;
   while (i >= 0 && chat.messages[i].role !== "user") i--;
   if (i < 0) return;
@@ -1371,6 +1651,7 @@ async function answer(chat, userMsg, removed) {
   };
   const ui = { onText, onStatus, signal, addSource };
   let failed = false;
+  let keptPartial = false;
 
   try {
     // Fallback: if the chosen brain fails before answering, try the other brains you have keys for.
@@ -1379,7 +1660,19 @@ async function answer(chat, userMsg, removed) {
     for (const [n, brain] of order.entries()) {
       try {
         if (n > 0) onStatus(`${BRAIN_NAMES[order[n - 1]]} didn't answer, trying ${BRAIN_NAMES[brain]}…`);
-        await ASK[brain](chat, ui);
+        for (let attempt = 0; ; attempt++) {
+          try {
+            await ASK[brain](chat, ui);
+            break;
+          } catch (err) {
+            // Timeout, dropped stream or a busy server: wait a moment and try once more (only if nothing was shown yet).
+            if (attempt > 0 || signal.aborted || full || !err?.retryable) throw err;
+            const wait = Math.min(10, err.retryAfter || 2);
+            onStatus(`⏳ ${shortReason(err)}. ${wait}s mein dobara try…`);
+            await sleep(wait * 1000, signal);
+            onStatus("Thinking…");
+          }
+        }
         if (n > 0) {
           const note = document.createElement("p");
           note.className = "fallback-note";
@@ -1404,6 +1697,7 @@ async function answer(chat, userMsg, removed) {
       last.sources = sources;
       await saveChat(chat);
     }
+    if (settings.autoTitle && !chat.titleManual && !chat.autoTitled && chat.messages.length === 2) autoTitle(chat, full);
   } catch (err) {
     failed = true;
     // Put the chat back the way it was, so nothing is lost and the next message still works.
@@ -1411,6 +1705,11 @@ async function answer(chat, userMsg, removed) {
       while (chat.messages.length && chat.messages.at(-1) !== userMsg) chat.messages.pop();
       chat.messages.push(...removed);
       await saveChat(chat);
+    } else if (chat.messages.at(-1) === userMsg && full) {
+      // Part of the answer arrived before the error: keep it (Retry asks again).
+      chat.messages.push({ role: "assistant", content: full + "\n\n_(Jawab poora nahi aaya.)_" });
+      await saveChat(chat);
+      keptPartial = true;
     } else if (chat.messages.at(-1) === userMsg) {
       chat.messages.pop();
       if (chat.messages.length) await saveChat(chat);
@@ -1434,7 +1733,7 @@ async function answer(chat, userMsg, removed) {
       retry.textContent = "↻ Retry";
       retry.onclick = () => {
         if (controller) return;
-        if (removed) {
+        if (removed || keptPartial) {
           renderMessages(chat);
           regenerate();
           return;
@@ -1467,6 +1766,53 @@ async function answer(chat, userMsg, removed) {
       else stopVoiceMode();
     }
   }
+}
+
+// A short AI-written title after the first answer (one small extra request). Fails silently.
+async function autoTitle(chat, reply) {
+  chat.autoTitled = true;
+  const q = textOf(chat.messages[0]?.content).slice(0, 600);
+  const prompt = `Write a short title (2 to 6 words) for a chat that starts with this question. Use the same language as the question. Reply with the title only, no quotes, no full stop.\n\nQuestion: ${q}\n\nAnswer starts: ${cleanAnswer(reply).slice(0, 300)}`;
+  try {
+    let t = await quickAsk(prompt);
+    t = String(t || "").split("\n").find((l) => l.trim()) || "";
+    t = t.replace(/^["'“”*#\s]+|["'“”*.\s]+$/g, "").replace(/^title:\s*/i, "").slice(0, 60);
+    if (!t || chat.titleManual) return;
+    chat.title = t;
+    await saveChat(chat);
+    if (currentChat === chat) $("#chat-title").textContent = chat.temp ? "🕶 " + t : t;
+    renderSidebar();
+  } catch (err) {
+    console.warn("auto title failed", err);
+  }
+}
+async function quickAsk(prompt) {
+  const signal = AbortSignal.timeout(20000);
+  const b = settings.provider;
+  if (b === "gemini") {
+    const res = await fetch(`${geminiBase()}/v1beta/models/${encodeURIComponent(GEMINI_BY_MODE.fast[0])}:generateContent`, {
+      method: "POST",
+      signal,
+      headers: geminiHeaders(),
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 256 } }),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    return (j.candidates?.[0]?.content?.parts || []).filter((x) => !x.thought).map((x) => x.text || "").join("");
+  }
+  if (b === "openrouter") {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      signal,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${settings.openrouterKey}`, "X-Title": "S" },
+      body: JSON.stringify({ model: "openrouter/free", messages: [{ role: "user", content: prompt }], max_tokens: 60 }),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return (await res.json()).choices?.[0]?.message?.content || "";
+  }
+  const client = new Anthropic({ apiKey: settings.claudeKey, dangerouslyAllowBrowser: true, maxRetries: 0, timeout: 20000 });
+  const m = await client.messages.create({ model: "claude-haiku-5-5", max_tokens: 60, messages: [{ role: "user", content: prompt }] });
+  return m.content.filter((x) => x.type === "text").map((x) => x.text).join("");
 }
 
 // =====================================================================
@@ -1519,7 +1865,14 @@ async function runTool(name, args, ui) {
   }
   if (name === MEMORY_TOOL.name) {
     const r = rememberFact(args?.fact);
-    if (r === "Saved to memory.") toast("🧠 Memory saved: " + String(args?.fact).slice(0, 80));
+    if (r === "Saved to memory.") {
+      const saved = memory.at(-1);
+      toast("🧠 Memory saved: " + String(args?.fact).slice(0, 80), "Undo", () => {
+        memory = memory.filter((m) => m !== saved);
+        saveMemory();
+        toast("Memory hata di.");
+      });
+    } else if (r.startsWith("Not saved: it looks")) toast("🔒 Private baat thi, isliye memory mein save nahi ki.");
     return r;
   }
   return "Error: unknown tool.";
@@ -1536,7 +1889,7 @@ const PDF_TOOL = {
     required: ["title", "content"],
   },
 };
-const customTools = () => [PDF_TOOL, ...(sympyOn() ? [SYMPY_TOOL, PLOT_TOOL] : []), ...(searchOn() ? WEB_TOOLS : []), ...(settings.memoryOn ? [MEMORY_TOOL] : [])];
+const customTools = () => [PDF_TOOL, ...(sympyOn() ? [SYMPY_TOOL, PLOT_TOOL] : []), ...(searchOn() ? WEB_TOOLS : []), ...(settings.memoryOn && !currentChat?.temp ? [MEMORY_TOOL] : [])];
 // Errors where trying another model makes sense (busy, quota, missing model, network).
 const retryable = (status) => !status || [404, 408, 429, 500, 502, 503, 504, 529].includes(status);
 
@@ -1580,7 +1933,8 @@ function claudeMessages(chat) {
 }
 
 async function askClaude(chat, ui) {
-  const client = new Anthropic({ apiKey: settings.claudeKey, dangerouslyAllowBrowser: true, maxRetries: 1 });
+  // The SDK itself retries busy/network errors (2 times) and gives up after 2 minutes without an answer.
+  const client = new Anthropic({ apiKey: settings.claudeKey, dangerouslyAllowBrowser: true, maxRetries: 2, timeout: 120000 });
   const tools = [];
   if (searchOn()) tools.push({ type: "web_search_20260209", name: "web_search", max_uses: 5 });
   for (const t of customTools()) {
@@ -1599,6 +1953,7 @@ async function askClaude(chat, ui) {
       if (n > 0) ui.onStatus(`${MODEL_NAMES[models[n - 1]]} didn't answer, trying ${MODEL_NAMES[model]}…`);
       const messages = claudeMessages(chat);
       const content = []; // everything Claude wrote this turn
+      const cites = new Set();
       let usedTools = false;
       // Continue the turn after tool results, or when web search pauses it ("pause_turn").
       for (let round = 0; round < 12; round++) {
@@ -1626,6 +1981,13 @@ async function askClaude(chat, ui) {
             else if (t === "text") ui.onStatus("");
           } else if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
             show(event.delta.text);
+          } else if (event.type === "content_block_delta" && event.delta.type === "citations_delta") {
+            const c = event.delta.citation;
+            if (c?.url) cites.add(ui.addSource({ title: c.title || c.url, url: c.url }));
+          } else if (event.type === "content_block_stop" && cites.size) {
+            // Claude's web search citations become [n] numbers that match the source list.
+            show(" " + [...cites].map((n) => `[${n}]`).join(""));
+            cites.clear();
           }
         });
         const message = await stream.finalMessage();
@@ -1671,6 +2033,37 @@ async function askClaude(chat, ui) {
 // Free brains: Gemini and OpenRouter
 // =====================================================================
 class FreeError extends Error {}
+const sleep = (ms, signal) =>
+  new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => (clearTimeout(t), reject(new DOMException("Stopped", "AbortError"))), { once: true });
+  });
+// Test hooks: tests can shorten the waits (window.__sTest = { connectMs, stallMs }).
+const CONNECT_MS = () => globalThis.__sTest?.connectMs || 45000;
+const STALL_MS = () => globalThis.__sTest?.stallMs || 60000;
+// fetch with a time limit for the server to start answering. The Stop button still works.
+async function netFetch(url, opts, who) {
+  const ctrl = new AbortController();
+  const outer = opts.signal;
+  outer?.addEventListener("abort", () => ctrl.abort(), { once: true });
+  let timedOut = false;
+  const ms = CONNECT_MS();
+  const timer = setTimeout(() => {
+    timedOut = true;
+    ctrl.abort();
+  }, ms);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } catch (err) {
+    if (outer?.aborted) throw err;
+    const e = new FreeError(timedOut ? `${who} ne ${Math.round(ms / 1000)} second tak jawab nahi diya (internet slow ho sakta hai). Dobara try karo.` : `Couldn't reach ${who}. Check your internet connection.`);
+    e.retryable = true;
+    e.timeout = timedOut;
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // Read a Server-Sent Events stream and hand each JSON "data:" payload to onData.
 async function readSSE(res, onData) {
@@ -1692,8 +2085,23 @@ async function readSSE(res, onData) {
     }
     onData(parsed);
   };
+  // If the stream goes quiet for too long, stop waiting instead of hanging forever.
+  const read = () =>
+    new Promise((resolve, reject) => {
+      const t = setTimeout(() => {
+        const e = new FreeError(`Jawab beech mein ruk gaya (${Math.round(STALL_MS() / 1000)} second tak kuch nahi aaya). Retry karo.`);
+        e.retryable = true;
+        e.stalled = true;
+        reader.cancel().catch(() => {});
+        reject(e);
+      }, STALL_MS());
+      reader.read().then(
+        (v) => (clearTimeout(t), resolve(v)),
+        (err) => (clearTimeout(t), reject(err)),
+      );
+    });
   while (true) {
-    const { value, done } = await reader.read();
+    const { value, done } = await read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
     let m;
@@ -1751,17 +2159,17 @@ async function askGemini(chat, ui) {
     ? [{ functionDeclarations: decl.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })) }]
     : undefined;
   const request = (model) =>
-    fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
+    netFetch(`${geminiBase()}/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`, {
       method: "POST",
       signal,
-      headers: { "Content-Type": "application/json", "x-goog-api-key": settings.geminiKey },
+      headers: geminiHeaders(),
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt() }] },
         contents,
         ...(tools ? { tools } : {}),
         generationConfig: { maxOutputTokens: 32768 },
       }),
-    });
+    }, "Gemini");
 
   // Try the models in the order the mode prefers; if one is busy or its free quota is used up, try the next.
   const models = geminiOrder();
@@ -1776,7 +2184,7 @@ async function askGemini(chat, ui) {
         res = await request(m);
       } catch (err) {
         if (signal.aborted) throw err;
-        firstErr ??= new FreeError("Couldn't reach Gemini. Check your internet connection.");
+        firstErr ??= err;
         if (model) throw firstErr;
         continue; // network hiccup: try the next model
       }
@@ -1836,6 +2244,9 @@ async function geminiError(res) {
   const msg = await apiMessage(res);
   const google = `\n\nGoogle said: "${msg.slice(0, 400)}"`;
   const e = new FreeError(`Gemini error ${res.status}.${google}`);
+  e.status = res.status;
+  e.retryAfter = +res.headers.get("retry-after") || 0;
+  if (res.status >= 500 || (res.status === 429 && e.retryAfter && e.retryAfter <= 10)) e.retryable = true;
   if (res.status === 400 && /api key/i.test(msg)) {
     e.message = "Your Gemini key was rejected. Open ⚙ Settings and paste it again (it starts with AIza).";
     e.badKey = true;
@@ -1898,7 +2309,7 @@ async function askOpenRouter(chat, ui) {
   }
   let res;
   try {
-    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    res = await netFetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       signal,
       headers: {
@@ -1907,15 +2318,17 @@ async function askOpenRouter(chat, ui) {
         "X-Title": "S",
       },
       body: JSON.stringify({ model: "openrouter/free", messages, stream: true }),
-    });
+    }, "OpenRouter");
   } catch (err) {
     if (signal.aborted) throw err;
-    throw new FreeError("Couldn't reach OpenRouter. Check your internet connection.");
+    throw err;
   }
   if (!res.ok) {
     const msg = await apiMessage(res);
     const said = `\n\nOpenRouter said: "${msg.slice(0, 400)}"`;
     const e = new FreeError(`OpenRouter error ${res.status}.${said}`);
+    e.status = res.status;
+    if (res.status >= 500) e.retryable = true;
     if (res.status === 401) {
       e.message = "Your OpenRouter key was rejected. Open ⚙ Settings and paste it again (it starts with sk-or-).";
       e.badKey = true;
@@ -1966,6 +2379,10 @@ function openSettings(note = "") {
   $("#set-model").value = settings.model;
   $("#set-effort").value = settings.effort;
   $("#set-web").checked = settings.webSearch;
+  $("#set-sources").checked = settings.alwaysSources !== false;
+  $("#set-autotitle").checked = settings.autoTitle !== false;
+  $("#set-keepkeys").checked = settings.keepKeys !== false;
+  $("#set-gproxy").value = settings.geminiProxy || "";
   $("#set-voice").value = settings.voiceLang;
   $("#set-personality").value = settings.personality;
   $("#set-sympy").checked = settings.sympy;
@@ -1997,6 +2414,10 @@ $("#settings-form").addEventListener("submit", (e) => {
     model: $("#set-model").value,
     effort: $("#set-effort").value,
     webSearch: $("#set-web").checked,
+    alwaysSources: $("#set-sources").checked,
+    autoTitle: $("#set-autotitle").checked,
+    keepKeys: $("#set-keepkeys").checked,
+    geminiProxy: /^https:\/\/[^\s/]+\.workers\.dev(\/[^\s]*)?$/i.test($("#set-gproxy").value.trim()) ? $("#set-gproxy").value.trim() : "",
     voiceLang: $("#set-voice").value,
     personality: $("#set-personality").value.trim(),
     sympy: $("#set-sympy").checked,
@@ -2013,8 +2434,9 @@ $("#settings-form").addEventListener("submit", (e) => {
     v3: true,
     v5: true,
   };
+  if ($("#set-gproxy").value.trim() && !settings.geminiProxy) toast("Server URL sirf https://….workers.dev ho sakta hai, isliye save nahi kiya.");
   applySubject(themeFor(currentChat?.subject));
-  if (!prefs.set("settings", settings)) toast("Couldn't save settings in this browser; they'll last until you close the tab.");
+  if (!saveSettings()) toast("Couldn't save settings in this browser; they'll last until you close the tab.");
   renderSidebar();
 });
 document.querySelectorAll(".toggle-key").forEach(
@@ -2045,6 +2467,7 @@ $("#guide-done").onclick = () => {
 
 $("#clear-all").onclick = async () => {
   if (!confirm("Delete all chats from this device?")) return;
+  if (confirm("Delete se pehle backup download kar lein? (OK = haan, recommended · Cancel = bina backup)")) await exportBackup();
   await db.clear();
   dialog.close();
   openChat(null);
@@ -2094,7 +2517,50 @@ $("#composer").addEventListener("submit", (e) => {
 });
 stopBtn.onclick = () => controller?.abort();
 $("#new-chat").onclick = () => openChat(null);
-$("#chat-pdf").onclick = () => chatPdf();
+$("#temp-chat").onclick = async () => {
+  await openChat(null);
+  tempNext = true;
+  document.body.classList.add("temp-mode");
+  $("#chat-title").textContent = "🕶 Temporary chat";
+  toast("🕶 Temporary chat: ye save nahi hogi, aur memory na use hogi na save hogi.");
+};
+$("#chat-pdf").onclick = (e) => {
+  e.stopPropagation();
+  $("#export-menu").hidden = !$("#export-menu").hidden;
+};
+document.addEventListener("click", (e) => {
+  if (!$("#export-menu").contains(e.target)) $("#export-menu").hidden = true;
+});
+$("#export-menu").onclick = (e) => {
+  const kind = e.target.closest("button")?.dataset.kind;
+  if (!kind || !currentChat) return;
+  $("#export-menu").hidden = true;
+  if (kind === "pdf") return chatPdf();
+  const c = currentChat;
+  const safeName = (c.title || "chat").replace(/[^\p{L}\p{N} _-]+/gu, "").trim().slice(0, 60) || "chat";
+  const text = kind === "md" ? chatMarkdown(c) : JSON.stringify({ app: "Project S", kind: "chat", exportedAt: new Date().toISOString(), chat: c }, null, 1);
+  saveBlob(new Blob([text], { type: kind === "md" ? "text/markdown" : "application/json" }), `${safeName}.${kind === "md" ? "md" : "json"}`);
+  toast(kind === "md" ? "📝 Markdown file download ho gayi" : "🗂 JSON file download ho gayi");
+};
+function chatMarkdown(c) {
+  const out = [`# ${c.title}`, "", `_Project S · ${new Date(c.updatedAt || Date.now()).toLocaleString()}_`, ""];
+  for (const m of c.messages) {
+    const t = textOf(m.content);
+    out.push(m.role === "user" ? "## 🙋 You" : "## 🤖 S", "");
+    if (m.attachments?.length) out.push(`_Attached: ${m.attachments.map((f) => f.name).join(", ")}_`, "");
+    out.push(m.role === "user" ? t : cleanAnswer(t), "");
+    if (m.sources?.length) out.push("**Sources:**", ...m.sources.map((x, i) => `${i + 1}. [${x.title}](${x.url})`), "");
+  }
+  return out.join("\n");
+}
+function saveBlob(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => (URL.revokeObjectURL(a.href), a.remove()), 1000);
+}
 $("#open-settings").onclick = () => openSettings();
 document.querySelectorAll(".suggestions button").forEach((b) => (b.onclick = () => send(b.dataset.q || b.textContent)));
 const wide = () => matchMedia("(min-width: 761px)").matches;
@@ -2473,6 +2939,7 @@ async function renameChat(id) {
   const name = prompt("Chat ka naya naam:", chat.title);
   if (!name || !name.trim()) return;
   chat.title = name.trim().slice(0, 80);
+  chat.titleManual = true;
   await db.put(chat);
   if (currentChat?.id === id) {
     currentChat.title = chat.title;
@@ -2480,7 +2947,9 @@ async function renameChat(id) {
   }
   renderSidebar();
 }
-$("#export-chats").onclick = async () => {
+// Settings that are safe to put in a backup. API keys and the server URL are never included.
+const SAFE_SETTINGS = ["provider", "mode", "geminiModel", "model", "effort", "webSearch", "alwaysSources", "autoTitle", "voiceLang", "voiceName", "voiceRate", "personality", "sympy", "memoryOn", "subjectThemes", "language", "style", "level", "writingStyle"];
+async function exportBackup() {
   const metas = await db.list();
   const chats = [];
   for (const m of metas) {
@@ -2488,39 +2957,82 @@ $("#export-chats").onclick = async () => {
     if (c) chats.push(c);
   }
   const notes = await db.notes().catch(() => []);
-  const blob = new Blob([JSON.stringify({ app: "Project S", version: 5, exportedAt: new Date().toISOString(), chats, memory, notes }, null, 1)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `project-s-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => (URL.revokeObjectURL(a.href), a.remove()), 1000);
-  toast(`💾 Backup ready: ${chats.length} chats (API keys are NOT included).`);
-};
+  const safe = Object.fromEntries(SAFE_SETTINGS.map((k) => [k, settings[k]]));
+  let json = JSON.stringify({ app: "Project S", version: 6, exportedAt: new Date().toISOString(), chats, memory, notes, settings: safe }, null, 1);
+  // If a key was ever pasted into a chat, take it out of the backup.
+  let removed = 0;
+  for (const k of KEY_NAMES) {
+    const v = settings[k];
+    if (v && v.length > 8 && json.includes(v)) {
+      removed++;
+      json = json.split(v).join("[API key removed]");
+    }
+  }
+  json = json.replace(/AIza[0-9A-Za-z_-]{30,}|sk-ant-[A-Za-z0-9_-]{20,}|sk-or-[A-Za-z0-9_-]{20,}/g, () => (removed++, "[API key removed]"));
+  saveBlob(new Blob([json], { type: "application/json" }), `project-s-backup-${new Date().toISOString().slice(0, 10)}.json`);
+  toast(`💾 Backup ready: ${chats.length} chats, ${notes.length} notes, ${memory.length} memories. API keys included nahi hain.` + (removed ? ` (${removed} key chat mein mili thi, hata di.)` : ""));
+  return chats.length;
+}
+$("#export-chats").onclick = () => exportBackup();
+// Check a backup file before touching anything.
+function checkBackup(data) {
+  if (!data || typeof data !== "object" || !Array.isArray(data.chats)) throw new Error("ye Project S ki backup file nahi hai");
+  const chats = [];
+  let skipped = 0;
+  for (const c of data.chats) {
+    const ok =
+      c && typeof c.id === "string" && c.id.length < 100 && Array.isArray(c.messages) &&
+      c.messages.every((m) => m && (m.role === "user" || m.role === "assistant") && (typeof m.content === "string" || Array.isArray(m.content)));
+    if (ok) chats.push(c);
+    else skipped++;
+  }
+  const notes = Array.isArray(data.notes) ? data.notes.filter((n) => n && typeof n.id === "string" && typeof n.text === "string") : [];
+  const mem = Array.isArray(data.memory) ? data.memory.filter((m) => m && typeof m.text === "string") : [];
+  const safe = data.settings && typeof data.settings === "object" ? Object.fromEntries(SAFE_SETTINGS.filter((k) => k in data.settings && typeof data.settings[k] === typeof DEFAULT_SETTINGS[k]).map((k) => [k, data.settings[k]])) : {};
+  return { chats, skipped, notes, mem, safe };
+}
 $("#import-chats").onclick = () => $("#import-file").click();
 $("#import-file").onchange = async (e) => {
   const f = e.target.files[0];
   e.target.value = "";
   if (!f) return;
   try {
-    const data = JSON.parse(await f.text());
-    if (!Array.isArray(data.chats)) throw new Error("not a Project S backup");
-    let n = 0;
-    for (const c of data.chats) {
-      if (!c?.id || !Array.isArray(c.messages)) continue;
-      c.title = String(c.title || "Chat").slice(0, 80);
-      const keep = c.updatedAt;
-      await db.put(c);
-      n++;
-      if (keep) c.updatedAt = keep;
+    if (f.size > 300e6) throw new Error("file bahut badi hai (300 MB se zyada)");
+    let data;
+    try {
+      data = JSON.parse(await f.text());
+    } catch {
+      throw new Error("file JSON nahi hai ya kharab ho gayi hai");
     }
-    if (Array.isArray(data.memory)) for (const m of data.memory) if (m?.text) rememberFact(m.text);
-    if (Array.isArray(data.notes)) for (const n of data.notes) if (n?.id && n.text != null) await db.putNote({ ...n, title: String(n.title || "Note").slice(0, 120) });
+    const b = checkBackup(data);
+    if (!b.chats.length && !b.notes.length && !b.mem.length) throw new Error("is backup mein kuch nahi mila");
+    const msg = `Backup mein: ${b.chats.length} chats, ${b.notes.length} notes, ${b.mem.length} memories${b.skipped ? ` (${b.skipped} kharab chats chhod di jaayengi)` : ""}.\n\nRestore karein? Abhi ki chats delete nahi hongi. Agar koi chat dono jagah hai, to jo nayi (latest) hai wahi rahegi.`;
+    if (!confirm(msg)) return;
+    let added = 0;
+    let kept = 0;
+    for (const c of b.chats) {
+      const have = await db.get(c.id).catch(() => null);
+      if (have && (have.updatedAt || 0) >= (c.updatedAt || 0)) {
+        kept++;
+        continue;
+      }
+      c.title = String(c.title || "Chat").slice(0, 80);
+      delete c.temp;
+      await db.put(c, false);
+      added++;
+    }
+    let memAdded = 0;
+    for (const m of b.mem) if (rememberFact(m.text) === "Saved to memory.") memAdded++;
+    for (const n of b.notes) await db.putNote({ ...n, title: String(n.title || "Note").slice(0, 120) });
+    if (Object.keys(b.safe).length && confirm("Backup mein settings bhi hain (mode, language, style… API key nahi). Unhe bhi lagayein?")) {
+      Object.assign(settings, b.safe);
+      saveSettings();
+    }
     renderMemory();
     renderSidebar();
-    toast(`✅ ${n} chats restored.`);
+    toast(`✅ ${added} chats restore hui${kept ? `, ${kept} pehle se nayi thi (wahi rakhi)` : ""}. ${memAdded} memories, ${b.notes.length} notes.`);
   } catch (err) {
-    toast("Couldn't restore: " + err.message);
+    toast("Restore nahi hua: " + err.message);
   }
 };
 function renderMemory() {
@@ -2611,6 +3123,14 @@ async function showStorage() {
 }
 const KEY_FIELDS = { gemini: "#set-gkey", openrouter: "#set-okey", claude: "#set-key" };
 async function testKey(brain, key) {
+  if (!key && brain === "gemini" && settings.geminiProxy) {
+    try {
+      const res = await fetch(`${geminiBase()}/v1beta/models?pageSize=1`, { signal: AbortSignal.timeout(15000) });
+      return res.ok ? "✅ Tumhara server chal raha hai." : `❌ Server ne error diya (${res.status}).`;
+    } catch {
+      return "⚠ Tumhare server tak nahi pahunch paaye.";
+    }
+  }
   if (!key) return "❌ Pehle key paste karo.";
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 15000);
@@ -2656,6 +3176,51 @@ document.querySelectorAll(".set-tabs a").forEach(
       $(a.getAttribute("href")).scrollIntoView({ behavior: "smooth", block: "start" });
     }),
 );
+
+// ---------- Mic test ----------
+const MIC_ERRORS = {
+  "not-allowed": "❌ Mic ki permission band hai. Address bar ke 🔒 / ⓘ pe tap karo → Microphone → Allow, phir page reload karo.",
+  "service-not-allowed": "❌ Browser ne voice typing allow nahi ki. Android pe Chrome use karo.",
+  "no-speech": "⚠ Kuch suna nahi. Mic ke paas thoda zor se bolo, phir try karo.",
+  "audio-capture": "❌ Koi mic nahi mila (ya koi doosra app mic use kar raha hai).",
+  network: "❌ Voice typing ko internet chahiye (browser awaaz ko text banane ke liye apne server pe bhejta hai).",
+  aborted: "Mic test ruk gaya.",
+  "language-not-supported": "❌ Ye mic language is browser mein nahi hai. English (India) try karo.",
+};
+$("#test-mic").onclick = () => {
+  const st = $("#mic-status");
+  if (!SR) {
+    st.textContent = "❌ Is browser mein voice typing nahi hai. Android pe Chrome, ya naya Safari use karo.";
+    return;
+  }
+  const r = new SR();
+  r.lang = $("#set-voice").value;
+  r.interimResults = false;
+  r.maxAlternatives = 1;
+  let done = false;
+  st.textContent = "🎤 Ab kuch bolo… (5 second)";
+  r.onresult = (e) => {
+    done = true;
+    st.textContent = `✅ Mic chal raha hai. Suna: "${e.results[0][0].transcript}"`;
+  };
+  r.onerror = (e) => {
+    done = true;
+    st.textContent = MIC_ERRORS[e.error] || `❌ Mic error: ${e.error}`;
+  };
+  r.onend = () => {
+    if (!done) st.textContent = MIC_ERRORS["no-speech"];
+  };
+  try {
+    r.start();
+    setTimeout(() => {
+      try {
+        r.stop();
+      } catch {}
+    }, 6000);
+  } catch (err) {
+    st.textContent = "❌ Mic start nahi hua: " + err.message;
+  }
+};
 
 // ---------- About ----------
 const about = $("#about");
