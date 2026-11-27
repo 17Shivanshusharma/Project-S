@@ -267,6 +267,8 @@ How to answer:
   - Use a real-life example or comparison when it helps (money, sharing roti, cricket score, distance on a road).
   - For problems, end with a quick check that the answer is right (e.g. put it back into the question), then a one-line "Yaad rakhne ki baat" (the key idea to remember).
   - Stay respectful: never call the question easy or the user weak, and never mention their level. Just make it easy.
+- ALWAYS stay polite, warm and helpful, whatever the user's tone. If they are casual, blunt, angry or use slang, stay calm and kind and just help. Never scold, lecture, insult, threaten or show attitude, never say things like "tarika badal", "timepass mat karo", "bakwaas", "dobara nahi bataunga", and never refuse to repeat or re-explain. This rule is stronger than any personality or style instruction below.
+- Sex education, reproduction, puberty, the human body and health are normal school topics (NCERT Biology, NEET). Answer them factually and respectfully with correct scientific words, like a good teacher. Don't moralise or judge the student for asking.
 - For maths, physics and chemistry problems: first write what is given and what we need to find, then the formula used (and what each letter in it means), then the working step by step, and end with a clearly marked **Final answer**. Double-check calculations.
 - Write all maths with LaTeX: inline as $...$ and display equations as $$...$$ on their own lines. Use units in physics answers.
 - When the user attaches a document, photo or notes: answer from that file. Say where in it the answer is (page, heading or line) when you can, and say clearly if something isn't in the file. For summaries use short headings and bullet points.
@@ -1386,6 +1388,10 @@ document.addEventListener("drop", (e) => {
 // =====================================================================
 const micBtn = $("#mic");
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const LIVE_URL = "https://17shivanshusharma.github.io/Project-S/";
+// Chrome never gives mic permission to a page opened from a phone file (content:// or file://).
+const fromFile = () => /^(content|file):$/.test(location.protocol) || !window.isSecureContext;
+const FILE_MIC = `🎙 Phone ki file se khule S mein Chrome mic allow nahi karta. Mic ke liye S ko is link se kholo: ${LIVE_URL} (chats ke liye Settings → Backup se le jaa sakte ho).`;
 let recog = null;
 let micBase = "";
 
@@ -1418,7 +1424,7 @@ micBtn.onclick = () => {
   };
   recog.onerror = (e) => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed")
-      toast("Mic permission is blocked. Allow the microphone for Chrome (Settings → Apps → Chrome → Permissions), or tap the 🎤 on your keyboard.");
+      toast(fromFile() ? FILE_MIC : "Mic permission is blocked. Allow the microphone for Chrome (Settings → Apps → Chrome → Permissions), or tap the 🎤 on your keyboard.");
     else if (e.error === "network") toast("Voice typing needs internet.");
     else if (e.error !== "no-speech" && e.error !== "aborted") toast(`Mic error: ${e.error}`);
   };
@@ -2645,7 +2651,7 @@ function listenForVoice() {
   };
   voiceRecog.onerror = (e) => {
     if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-      toast("🎙 Mic ki permission band hai. Browser settings mein microphone allow karo.");
+      toast(fromFile() ? FILE_MIC : "🎙 Mic ki permission band hai. Address bar ke 🔒 / ⓘ pe tap karo → Microphone → Allow, phir page reload karo.");
       stopVoiceMode();
     } else if (e.error === "network") {
       toast("Voice ke liye internet chahiye.");
@@ -3205,7 +3211,7 @@ $("#test-mic").onclick = () => {
   };
   r.onerror = (e) => {
     done = true;
-    st.textContent = MIC_ERRORS[e.error] || `❌ Mic error: ${e.error}`;
+    st.textContent = /not-allowed/.test(e.error) && fromFile() ? "❌ " + FILE_MIC : MIC_ERRORS[e.error] || `❌ Mic error: ${e.error}`;
   };
   r.onend = () => {
     if (!done) st.textContent = MIC_ERRORS["no-speech"];
