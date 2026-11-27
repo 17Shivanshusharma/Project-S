@@ -6,7 +6,21 @@ import DOMPurify from "dompurify";
 import katex from "katex";
 import { startStarfield } from "./space.js";
 import { playIntro } from "./intro.js";
-import { runSympy, sympyLoaded, SYMPY_TOOL } from "./sympy.js";
+import { runSympy, sympyLoaded, SYMPY_TOOL, PLOT_TOOL, runPlot } from "./sympy.js";
+import hljs from "highlight.js/lib/core";
+import hlPython from "highlight.js/lib/languages/python";
+import hlJs from "highlight.js/lib/languages/javascript";
+import hlTs from "highlight.js/lib/languages/typescript";
+import hlXml from "highlight.js/lib/languages/xml";
+import hlCss from "highlight.js/lib/languages/css";
+import hlJava from "highlight.js/lib/languages/java";
+import hlC from "highlight.js/lib/languages/c";
+import hlCpp from "highlight.js/lib/languages/cpp";
+import hlSql from "highlight.js/lib/languages/sql";
+import hlBash from "highlight.js/lib/languages/bash";
+import hlJson from "highlight.js/lib/languages/json";
+import { readDocx } from "./docx.js";
+import { drawGraph } from "./graph.js";
 import { WEB_TOOLS, webSearch, readWebpage } from "./search.js";
 import { SUBJECTS, detectSubject, applySubject } from "./subjects.js";
 
@@ -52,7 +66,17 @@ const DEFAULT_SETTINGS = {
   webSearch: true,
   voiceLang: "en-IN",
   personality: "",
-  sympy: true, memoryOn: true };
+  sympy: true,
+  memoryOn: true,
+  // Personalization (v5)
+  language: "auto", // auto | hinglish | hindi | english
+  style: "balanced", // concise | balanced | detailed | beginner
+  level: "beginner", // study level
+  writingStyle: "simple",
+  subjectThemes: true,
+  voiceName: "",
+  voiceRate: 1,
+};
 const saved = prefs.get("settings", {});
 if (saved.apiKey && !saved.claudeKey) saved.claudeKey = saved.apiKey; // from the first version
 delete saved.apiKey;
@@ -68,23 +92,38 @@ if (!saved.v3) {
   saved.webSearch = true;
   saved.v3 = true;
 }
+if (!saved.v5) {
+  // v5: "Normal" is the new everyday mode.
+  if (!saved.mode || saved.mode === "fast") saved.mode = "normal";
+  saved.v5 = true;
+}
 let settings = { ...DEFAULT_SETTINGS, ...saved };
 const saveSettings = () => prefs.set("settings", settings);
 const activeKey = () =>
   ({ gemini: settings.geminiKey, openrouter: settings.openrouterKey, claude: settings.claudeKey })[settings.provider];
 // Smart model selector: each mode has a preferred order; if one model fails, the next is tried.
 const MODES = {
-  fast: { label: "⚡ Fast", effort: "low" },
-  reasoning: { label: "🧠 Reasoning", effort: "high" },
-  coding: { label: "💻 Coding", effort: "medium" },
-  study: { label: "📚 Study", effort: "medium" },
+  normal: { label: "💬 Normal", desc: "Roz ke sawaal, balanced jawab", effort: "medium" },
+  fast: { label: "⚡ Fast", desc: "Jaldi aur chhota jawab", effort: "low" },
+  reasoning: { label: "🧠 Reasoning", desc: "Mushkil sawaal, soch-samajh ke", effort: "high" },
+  coding: { label: "💻 Coding", desc: "Code likhna, bug theek karna, samjhana", effort: "medium" },
+  study: { label: "📚 Study", desc: "Tutor: hints, quiz, flashcards, notes", effort: "medium" },
+  maths: { label: "🧮 Maths", desc: "Step by step, SymPy se check, graph", effort: "high" },
+  research: { label: "🔎 Research", desc: "Web search, sources ke saath report", effort: "medium" },
+  writing: { label: "✍️ Writing", desc: "Essay, email, application, grammar", effort: "medium" },
 };
+const WRITING_STYLES = { professional: "Professional", simple: "Simple", academic: "Academic", casual: "Casual", concise: "Concise", detailed: "Detailed" };
+const LEVELS = { beginner: "Beginner", intermediate: "Intermediate", advanced: "Advanced" };
 const GEMINI_FREE = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.6-flash"];
 const GEMINI_BY_MODE = {
   fast: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.6-flash", "gemini-3.8-flash"],
   reasoning: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
   coding: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
   study: ["gemini-3.6-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
+  normal: ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-3.8-flash"],
+  maths: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
+  research: ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-flash-lite"],
+  writing: ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-flash-lite"],
 };
 const CLAUDE_MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
 const CLAUDE_BY_MODE = {
@@ -92,6 +131,10 @@ const CLAUDE_BY_MODE = {
   reasoning: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
   coding: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
   study: ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"],
+  normal: ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"],
+  maths: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
+  research: ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"],
+  writing: ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"],
 };
 const MODEL_NAMES = {
   "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite",
@@ -102,7 +145,7 @@ const MODEL_NAMES = {
   "claude-sonnet-5-5": "Claude Sonnet 5.5",
   "claude-haiku-5-5": "Claude Haiku 5.5",
 };
-const mode = () => (MODES[settings.mode] ? settings.mode : "fast");
+const mode = () => (MODES[settings.mode] ? settings.mode : "normal");
 const preferFirst = (pick, list) => (pick && pick !== "auto" ? [pick, ...list.filter((m) => m !== pick)] : list);
 const geminiOrder = () => preferFirst(settings.geminiModel, GEMINI_BY_MODE[mode()]);
 const claudeOrder = () => preferFirst(settings.model, CLAUDE_BY_MODE[mode()]);
@@ -110,7 +153,7 @@ const claudeEffort = () => (settings.effort && settings.effort !== "auto" ? sett
 const activeModel = () =>
   ({ gemini: MODEL_NAMES[geminiOrder()[0]], openrouter: "OpenRouter free models", claude: MODEL_NAMES[claudeOrder()[0]] })[settings.provider];
 // Web search costs extra on Gemini, so S only searches when Claude is the brain.
-const searchOn = () => !!settings.webSearch;
+const searchOn = () => !!settings.webSearch || mode() === "research";
 // The SymPy maths engine is a tool the AI calls. OpenRouter's free models don't all support tools.
 const sympyOn = () => settings.sympy && settings.provider !== "openrouter";
 
@@ -141,6 +184,30 @@ function memoryPrompt() {
   return `- Memory: you remember things across chats with the save_memory tool. When the user tells you a lasting fact about themselves or says "yaad rakhna"/"remember", save it and tell them briefly ("🧠 Yaad rakh liya"). ${list ? "What you already know about the user:\n" + list + "\nUse this naturally; don't repeat it back unless it helps." : ""}`;
 }
 
+function modePrompt() {
+  const lvl = LEVELS[settings.level] || "Beginner";
+  return {
+    normal: "NORMAL. Everyday questions and conversation. Balanced: complete but not long-winded.",
+    fast: "FAST. Keep answers short and direct (still correct and simple). No long introductions.",
+    reasoning: "REASONING. Think carefully, break the problem down, check each step and the final answer before replying. Show the key reasoning, not every thought.",
+    coding: "CODING. Write complete, runnable code in code blocks with the language tag, with short comments. Then explain how it works and how to run it, and mention edge cases. For debugging: find the cause first, explain it, then give the fixed code. For code review: list issues by importance. You can't run the user's code; say what output to expect instead.",
+    study: `STUDY (tutor), level: ${lvl}. Teach, don't just hand over answers. Explain the idea simply at a ${lvl.toLowerCase()} level, then guide the user with one hint or question at a time and let them try. When they ask, make practice questions, MCQs (answers hidden at the end under "Answers"), flashcards (a table: Question | Answer), a quiz (one question at a time, wait for their answer, then say right or wrong and why), revision notes or a topic summary. Praise effort, correct mistakes gently and explain why. Let the student choose what's next.`,
+    maths: "MATHS. Solve step by step: given, to find, formula (what each letter means), working, check, **Final answer**. Use run_sympy for every non-trivial calculation and to verify the final answer; say \"✔ Checked with SymPy\" only when a SymPy run actually confirmed it. When a graph helps (functions, equations, trigonometry), call plot_graph. Use SymPy units for unit conversions.",
+    research: "RESEARCH. Always search the web first (several searches if needed, and read the best pages). Answer in this format: **Short answer**, **Detailed findings**, **Important facts** (✅ each with its [n] source), **🤔 Not confirmed** (only if any), **Limitations** (what the sources don't cover, how recent they are). Never invent sources or results. If search fails or finds nothing, say clearly that live search didn't work and what you know may be outdated.",
+    writing: `WRITING assistant. Style: ${WRITING_STYLES[settings.writingStyle] || "Simple"}. Help with essays, summaries, grammar correction, translation, emails, applications, reports, creative writing, rewriting and tone changes. Write the finished text first (in a quote or clearly separated), then a short note on what you changed or why. For grammar correction show the corrected text and list the main mistakes. Write in the language the user asks for; if they don't say, use the language of their message.`,
+  }[mode()];
+}
+function personalPrompt() {
+  const lang = { hinglish: "Always reply in Hinglish (Roman script).", hindi: "Always reply in Hindi (Devanagari script).", english: "Always reply in simple English.", auto: "" }[settings.language] || "";
+  const style = {
+    concise: "Answer style: concise. Keep answers short; use bullet points.",
+    balanced: "",
+    detailed: "Answer style: detailed. Give thorough answers with examples.",
+    beginner: "Answer style: beginner-friendly. Assume no background; define every term.",
+  }[settings.style] || "";
+  return [lang && "- " + lang, style && "- " + style].filter(Boolean).join("\n");
+}
+
 function systemPrompt() {
   return `You are ${NAME}, a friendly, brilliant personal AI assistant and tutor, created by Shivanshu Sharma.
 You can help with anything: every school and college subject (maths, physics, chemistry, biology, history, geography, civics, economics, English, Hindi, computer science, accounts), competitive exams (JEE, NEET, boards), coding, writing, general knowledge, advice and brainstorming.
@@ -169,7 +236,8 @@ ${searchOn() ? `- You can search the web (web_search) and open links (read_webpa
   **✅ Verified (sources se):** facts the sources state, each with its source number like [1].
   **🤔 Andaza / not confirmed:** anything you're inferring or that sources don't confirm. Leave this out if there's nothing.
   The app lists the source links under your answer, so don't paste long URLs.` : "- Web search is off, so for very recent news say your information may be out of date and suggest turning on 🌐 Web search."}
-- Current mode: ${{ fast: "FAST. Keep answers short and direct (still correct and simple). No long introductions.", reasoning: "REASONING. Think carefully, break the problem down, check each step and the final answer before replying.", coding: "CODING. Write complete, runnable code in code blocks with the language tag, with short comments. Then explain how it works and how to run it, and mention edge cases.", study: "STUDY (tutor). Teach, don't just hand over answers. Explain the idea simply, then guide the user with one hint or question at a time and let them try. When they ask, make a short quiz (MCQs with answers hidden at the end), flashcards (a table: Question | Answer) or a quick revision sheet. Praise effort and correct mistakes gently, explaining why." }[mode()]}
+- Current mode: ${modePrompt()}
+${personalPrompt()}
 ${memoryPrompt()}
 ${settings.personality ? "\nExtra instructions from your owner:\n" + settings.personality : ""}`;
 }
@@ -179,15 +247,15 @@ ${settings.personality ? "\nExtra instructions from your owner:\n" + settings.pe
 // =====================================================================
 const db = (() => {
   let dbp = null;
-  const mem = { meta: new Map(), chats: new Map() }; // fallback if IndexedDB is blocked
+  const mem = { meta: new Map(), chats: new Map(), notes: new Map() }; // fallback if IndexedDB is blocked
   function open() {
     if (dbp) return dbp;
     dbp = new Promise((resolve) => {
       try {
-        const req = indexedDB.open("s-ai", 1);
+        const req = indexedDB.open("s-ai", 2);
         req.onupgradeneeded = () => {
-          req.result.createObjectStore("meta", { keyPath: "id" });
-          req.result.createObjectStore("chats", { keyPath: "id" });
+          const d = req.result;
+          for (const name of ["meta", "chats", "notes"]) if (!d.objectStoreNames.contains(name)) d.createObjectStore(name, { keyPath: "id" });
         };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => resolve(null);
@@ -215,10 +283,10 @@ const db = (() => {
       return (rows || []).sort((a, b) => b.updatedAt - a.updatedAt);
     },
     get: (id) => run("chats", "readonly", (s, m) => (s ? s.get(id) : { result: m.get(id) })),
-    async put(chat) {
-      chat.updatedAt = Date.now();
+    async put(chat, touch = true) {
+      if (touch || !chat.updatedAt) chat.updatedAt = Date.now();
       const fileCount = chat.messages.reduce((n, m) => n + (m.attachments?.length || 0), 0);
-      const meta = { id: chat.id, title: chat.title, updatedAt: chat.updatedAt, fileCount, subject: chat.subject || "general" };
+      const meta = { id: chat.id, title: chat.title, updatedAt: chat.updatedAt, fileCount, subject: chat.subject || "general", pinned: !!chat.pinned };
       await run("chats", "readwrite", (s, m) => (s ? s.put(chat) : m.set(chat.id, chat)));
       await run("meta", "readwrite", (s, m) => (s ? s.put(meta) : m.set(meta.id, meta)));
     },
@@ -230,17 +298,31 @@ const db = (() => {
       await run("chats", "readwrite", (s, m) => (s ? s.clear() : m.clear()));
       await run("meta", "readwrite", (s, m) => (s ? s.clear() : m.clear()));
     },
+    // Library: saved answers and notes
+    async notes() {
+      const rows = await run("notes", "readonly", (s, m) => (s ? s.getAll() : { result: [...m.values()] }));
+      return (rows || []).sort((a, b) => b.updatedAt - a.updatedAt);
+    },
+    async putNote(n) {
+      n.updatedAt = Date.now();
+      await run("notes", "readwrite", (s, m) => (s ? s.put(n) : m.set(n.id, n)));
+    },
+    delNote: (id) => run("notes", "readwrite", (s, m) => (s ? s.delete(id) : m.delete(id))),
   };
 })();
 
 async function saveChat(chat) {
   try {
     await db.put(chat);
+    return true;
   } catch (err) {
     console.error(err);
-    toast("Couldn't save this chat (phone storage may be full). Delete some old chats.");
+    toast("⚠ Ye chat save nahi ho paayi (phone ki storage bhar gayi ho sakti hai). Purani chats delete karo ya ⚙ Settings → Backup download karo.");
+    return false;
   }
 }
+const newId = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+const themeFor = (sub) => (settings.subjectThemes === false ? "general" : sub || "general");
 
 // Move chats from the older localStorage version into IndexedDB, once.
 async function migrateOldChats() {
@@ -301,7 +383,46 @@ function renderMarkdown(text) {
   return html;
 }
 
+for (const [n, l] of Object.entries({ python: hlPython, javascript: hlJs, typescript: hlTs, xml: hlXml, css: hlCss, java: hlJava, c: hlC, cpp: hlCpp, sql: hlSql, bash: hlBash, json: hlJson })) hljs.registerLanguage(n, l);
+hljs.registerAliases(["html", "svg"], { languageName: "xml" });
+hljs.registerAliases(["py"], { languageName: "python" });
+hljs.registerAliases(["js", "node"], { languageName: "javascript" });
+hljs.registerAliases(["c++"], { languageName: "cpp" });
+hljs.registerAliases(["sh", "shell"], { languageName: "bash" });
+const LANG_NAMES = { python: "Python", javascript: "JavaScript", typescript: "TypeScript", xml: "HTML", css: "CSS", java: "Java", c: "C", cpp: "C++", sql: "SQL", bash: "Shell", json: "JSON" };
+
 function decorate(el) {
+  // Graphs drawn by the maths engine
+  el.querySelectorAll("pre > code.language-s-graph").forEach((code) => {
+    const pre = code.parentElement;
+    try {
+      pre.replaceWith(drawGraph(JSON.parse(code.textContent)));
+    } catch {
+      pre.remove();
+    }
+  });
+  // Code colours + language label
+  el.querySelectorAll("pre > code").forEach((code) => {
+    if (code.dataset.hl) return;
+    code.dataset.hl = "1";
+    const m = (code.className.match(/language-([\w+#-]+)/) || [])[1];
+    const lang = m && hljs.getLanguage(m) ? m : null;
+    if (code.textContent.length > 60000) return;
+    try {
+      const r = lang ? hljs.highlight(code.textContent, { language: lang, ignoreIllegals: true }) : null;
+      if (r) {
+        code.innerHTML = r.value; // highlight.js escapes the code itself
+        code.classList.add("hljs");
+      }
+    } catch {}
+    const name = lang ? LANG_NAMES[hljs.getLanguage(lang)?.name?.toLowerCase()] || LANG_NAMES[lang] || hljs.getLanguage(lang).name : m;
+    if (name && name !== "text" && name !== "s-graph") {
+      const tag = document.createElement("span");
+      tag.className = "code-lang";
+      tag.textContent = name;
+      code.parentElement.prepend(tag);
+    }
+  });
   el.querySelectorAll("a").forEach((a) => {
     a.target = "_blank";
     a.rel = "noopener noreferrer";
@@ -405,7 +526,7 @@ function addExtras(bubble, getText, sources = []) {
   copy.onclick = async () => {
     try {
       // Copy clean text without the SymPy boxes.
-      await navigator.clipboard.writeText(getText().replace(/<details class="calc">[\s\S]*?<\/details>\s*/g, "").trim());
+      await navigator.clipboard.writeText(cleanAnswer(getText()));
       copy.textContent = "✓ Copied";
     } catch {
       copy.textContent = "Couldn't copy";
@@ -416,61 +537,149 @@ function addExtras(bubble, getText, sources = []) {
   if ("speechSynthesis" in window) {
     const speak = document.createElement("button");
     speak.type = "button";
-    speak.className = "act-btn";
+    speak.className = "act-btn speak-btn";
     speak.textContent = "🔊 Suno";
     speak.onclick = () => readAloud(getText(), speak);
     box.appendChild(speak);
   }
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "act-btn";
+  save.textContent = "⭐ Save";
+  save.title = "Save this answer to your Library";
+  save.onclick = async () => {
+    const q = msg.previousElementSibling?.classList.contains("user") ? msg.previousElementSibling.querySelector(".bubble")?.innerText.trim() : "";
+    const text = cleanAnswer(getText());
+    try {
+      await db.putNote({ id: newId(), type: "answer", title: (q || text.split("\n")[0]).replace(/[#*]/g, "").slice(0, 80) || "Saved answer", text, chatId: currentChat?.id || "", createdAt: Date.now() });
+      save.textContent = "✓ Saved";
+      toast("⭐ Library mein save ho gaya");
+    } catch {
+      toast("⚠ Save nahi ho paaya (storage full?)");
+    }
+  };
+  box.appendChild(save);
+  const regen = document.createElement("button");
+  regen.type = "button";
+  regen.className = "act-btn regen-btn";
+  regen.textContent = "↻ Regenerate";
+  regen.title = "Ask for a new answer";
+  regen.onclick = () => regenerate();
+  box.appendChild(regen);
   msg.appendChild(box);
 }
+const cleanAnswer = (t) =>
+  String(t)
+    .replace(/<details class="calc">[\s\S]*?<\/details>\s*/g, "")
+    .replace(/```s-graph[\s\S]*?```\s*/g, "")
+    .trim();
 
 // ---------- Read aloud (speechSynthesis, built into Android and iPhone browsers) ----------
 let speakingBtn = null;
+let speakDone = null;
 function plainForSpeech(t) {
   return String(t)
     .replace(/<details class="calc">[\s\S]*?<\/details>/g, " ")
+    .replace(/```s-graph[\s\S]*?```/g, " (graph) ")
     .replace(/```[\s\S]*?```/g, " (code) ")
     .replace(/\$\$?([^$]+)\$\$?/g, (m, x) => x.replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "$1 by $2").replace(/\\(times|cdot)/g, " into ").replace(/\^2/g, " square").replace(/\^3/g, " cube").replace(/\\sqrt/g, " root ").replace(/[\\{}]/g, " "))
     .replace(/\[(\d+)\]/g, "")
+    .replace(/https?:\/\/\S+/g, " link ")
     .replace(/[#*_>|`~]/g, " ")
     .replace(/-{3,}/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
-function readAloud(text, btn) {
+function pickVoice(lang) {
+  const voices = window.speechSynthesis.getVoices();
+  return (settings.voiceName && voices.find((v) => v.name === settings.voiceName)) || voices.find((v) => v.lang.replace("_", "-") === lang) || voices.find((v) => v.lang.startsWith(lang.slice(0, 2)));
+}
+function resetSpeakBtn(btn) {
+  if (!btn) return;
+  btn.textContent = "🔊 Suno";
+  btn.nextElementSibling?.classList.contains("stop-speak") && btn.nextElementSibling.remove();
+}
+function stopSpeaking() {
   const synth = window.speechSynthesis;
-  const was = speakingBtn;
-  synth.cancel();
-  if (was) was.textContent = "🔊 Suno";
+  speakDone = null;
+  synth?.cancel();
+  resetSpeakBtn(speakingBtn);
   speakingBtn = null;
-  if (was === btn) return; // second tap stops
+}
+// Tap 🔊 to start, tap again to pause / resume, ⏹ to stop. onDone runs when it finishes (voice chat).
+function readAloud(text, btn, onDone) {
+  const synth = window.speechSynthesis;
+  if (!synth) return onDone?.();
+  if (btn && speakingBtn === btn) {
+    if (synth.paused) {
+      synth.resume();
+      btn.textContent = "⏸ Pause";
+    } else {
+      synth.pause();
+      btn.textContent = "▶ Resume";
+    }
+    return;
+  }
+  stopSpeaking();
   const clean = plainForSpeech(text);
-  if (!clean) return;
+  if (!clean) return onDone?.();
   const devanagari = /[\u0900-\u097F]/.test(clean);
   const lang = devanagari ? "hi-IN" : settings.voiceLang === "hi-IN" ? "hi-IN" : "en-IN";
-  const voices = synth.getVoices();
-  const voice = voices.find((v) => v.lang === lang) || voices.find((v) => v.lang.startsWith(lang.slice(0, 2)));
+  const voice = pickVoice(lang);
   // Speak in sentence-sized pieces: long texts stop early on some phones.
   const parts = clean.match(/[^.!?।\n]{1,220}[.!?।]?/g) || [clean];
+  speakDone = onDone || null;
+  const finish = () => {
+    if (speakingBtn === btn) {
+      resetSpeakBtn(btn);
+      speakingBtn = null;
+    }
+    const cb = speakDone;
+    speakDone = null;
+    cb?.();
+  };
   parts.forEach((p, i) => {
     const u = new SpeechSynthesisUtterance(p);
-    u.lang = lang;
+    u.lang = voice?.lang || lang;
     if (voice) u.voice = voice;
-    u.rate = 1;
-    if (i === parts.length - 1)
-      u.onend = u.onerror = () => {
-        if (speakingBtn === btn) {
-          btn.textContent = "🔊 Suno";
-          speakingBtn = null;
-        }
-      };
+    u.rate = +settings.voiceRate || 1;
+    if (i === parts.length - 1) u.onend = finish;
+    u.onerror = (e) => {
+      if (e.error !== "interrupted" && e.error !== "canceled") finish();
+    };
     synth.speak(u);
   });
-  btn.textContent = "⏹ Stop";
   speakingBtn = btn;
+  if (btn) {
+    btn.textContent = "⏸ Pause";
+    const stop = document.createElement("button");
+    stop.type = "button";
+    stop.className = "act-btn stop-speak";
+    stop.textContent = "⏹ Stop";
+    stop.onclick = () => stopSpeaking();
+    btn.after(stop);
+  } else voiceUI("speaking");
 }
 
-function addMessage(role, text = "", files = []) {
+function renderMessages(chat) {
+  messagesEl.querySelectorAll(".msg").forEach((m) => m.remove());
+  welcomeEl.hidden = !!chat.messages.length;
+  chat.messages.forEach((m, i) => {
+    const t = textOf(m.content);
+    if (!t && !m.attachments?.length) return;
+    const b = addMessage(m.role, t, m.attachments || [], i);
+    if (m.role === "assistant") addExtras(b, () => t, m.sources);
+  });
+  refreshRegen();
+  scrollToBottom(true);
+}
+// Only the newest answer gets the "Regenerate" button.
+function refreshRegen() {
+  const all = messagesEl.querySelectorAll(".msg.assistant .regen-btn");
+  all.forEach((b, i) => (b.hidden = i !== all.length - 1));
+}
+
+function addMessage(role, text = "", files = [], index = -1) {
   welcomeEl.hidden = true;
   const wrap = document.createElement("div");
   wrap.className = `msg ${role}`;
@@ -483,11 +692,28 @@ function addMessage(role, text = "", files = []) {
       t.textContent = text;
       bubble.appendChild(t);
     }
+    if (index >= 0) wrap.dataset.index = index;
+    const acts = document.createElement("div");
+    acts.className = "user-acts";
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "act-btn mini";
+    edit.textContent = "✏️ Edit";
+    edit.title = "Edit this message and ask again";
+    edit.onclick = () => editPrompt(wrap);
+    const cp = document.createElement("button");
+    cp.type = "button";
+    cp.className = "act-btn mini";
+    cp.textContent = "⧉";
+    cp.title = "Copy";
+    cp.onclick = () => navigator.clipboard?.writeText(text).then(() => toast("Copied"), () => {});
+    acts.append(edit, cp);
+    wrap.appendChild(acts);
   } else {
     bubble.innerHTML = renderMarkdown(text);
     decorate(bubble);
   }
-  wrap.appendChild(bubble);
+  wrap.prepend(bubble);
   messagesEl.appendChild(wrap);
   return bubble;
 }
@@ -502,8 +728,22 @@ async function renderSidebar() {
   const list = $("#chat-list");
   list.innerHTML = "";
   const q = $("#chat-search").value.trim().toLowerCase();
-  for (const c of chats) {
-    if (q && !c.title.toLowerCase().includes(q)) continue;
+  const day = 864e5;
+  const today = new Date().setHours(0, 0, 0, 0);
+  const groupOf = (c) =>
+    c.pinned ? "📌 Pinned" : c.updatedAt >= today ? "Today" : c.updatedAt >= today - day ? "Yesterday" : c.updatedAt >= today - 7 * day ? "Previous 7 days" : c.updatedAt >= today - 30 * day ? "Previous 30 days" : "Older";
+  const shown = chats.filter((c) => !q || c.title.toLowerCase().includes(q));
+  shown.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updatedAt - a.updatedAt);
+  let lastGroup = "";
+  for (const c of shown) {
+    const g = groupOf(c);
+    if (g !== lastGroup) {
+      const h = document.createElement("p");
+      h.className = "chat-group";
+      h.textContent = g;
+      list.appendChild(h);
+      lastGroup = g;
+    }
     const item = document.createElement("div");
     item.className = "chat-item" + (c.id === currentChat?.id ? " active" : "");
     const a = document.createElement("a");
@@ -514,30 +754,33 @@ async function renderSidebar() {
       e.preventDefault();
       openChat(c.id);
     };
-    const del = document.createElement("button");
-    del.className = "del";
-    del.type = "button";
-    del.textContent = "🗑";
-    del.title = "Delete chat";
-    del.onclick = async () => {
+    const mk = (icon, title, fn) => {
+      const b = document.createElement("button");
+      b.className = "del";
+      b.type = "button";
+      b.textContent = icon;
+      b.title = title;
+      b.setAttribute("aria-label", title);
+      b.onclick = fn;
+      return b;
+    };
+    const pin = mk(c.pinned ? "📌" : "📍", c.pinned ? "Unpin chat" : "Pin chat", () => pinChat(c.id));
+    if (c.pinned) pin.classList.add("on");
+    const ren = mk("✏️", "Rename chat", () => renameChat(c.id));
+    const del = mk("🗑", "Delete chat", async () => {
+      if (!confirm(`"${c.title}" delete karein? Ye wapas nahi aayegi.`)) return;
       await db.del(c.id);
       if (c.id === currentChat?.id) openChat(null);
       else renderSidebar();
-    };
-    const ren = document.createElement("button");
-    ren.className = "del";
-    ren.type = "button";
-    ren.textContent = "✏️";
-    ren.title = "Rename chat";
-    ren.onclick = () => renameChat(c.id);
+    });
     const dot = document.createElement("span");
     dot.className = "subj-dot";
     dot.style.background = (SUBJECTS[c.subject] || SUBJECTS.general).a;
     dot.title = (SUBJECTS[c.subject] || SUBJECTS.general).label;
-    item.append(dot, a, ren, del);
+    item.append(dot, a, pin, ren, del);
     list.appendChild(item);
   }
-  if (!list.children.length) {
+  if (!shown.length) {
     const empty = document.createElement("p");
     empty.className = "side-empty";
     empty.textContent = q ? "Koi chat nahi mili." : "Abhi koi chat nahi. Kuch bhi poocho!";
@@ -545,6 +788,14 @@ async function renderSidebar() {
   }
   $("#model-info").textContent = `${BRAIN_NAMES[settings.provider]} · ${activeModel()} · ${chats.length} chats`;
   updateModeUI();
+}
+async function pinChat(id) {
+  const chat = id === currentChat?.id ? currentChat : await db.get(id);
+  if (!chat) return;
+  chat.pinned = !chat.pinned;
+  await db.put(chat, false);
+  toast(chat.pinned ? "📌 Chat pinned (sabse upar rahegi)" : "Chat unpinned");
+  renderSidebar();
 }
 
 async function openChat(id) {
@@ -555,19 +806,11 @@ async function openChat(id) {
   currentChat = id ? (await db.get(id)) || null : null;
   $("#chat-title").textContent = currentChat?.title || "New chat";
   nextSubject = null;
-  applySubject(currentChat?.subject || "general");
+  applySubject(themeFor(currentChat?.subject));
   updateSubjectUI();
   document.body.classList.remove("side-open");
   window.speechSynthesis?.cancel();
-  if (currentChat) {
-    for (const m of currentChat.messages) {
-      const t = textOf(m.content);
-      if (!t && !m.attachments?.length) continue;
-      const b = addMessage(m.role, t, m.attachments || []);
-      if (m.role === "assistant") addExtras(b, () => t, m.sources);
-    }
-    scrollToBottom(true);
-  }
+  if (currentChat) renderMessages(currentChat);
   renderSidebar();
 }
 
@@ -619,6 +862,34 @@ async function shrinkImage(file) {
   return { mime: "image/jpeg", data: c.toDataURL("image/jpeg", 0.85).split(",")[1] };
 }
 
+const MAX_TEXT = 1500000;
+// Big documents: send only the parts that match the question (plus the start), so long files
+// still fit the AI's limit and the answer stays on the right part.
+let currentQuestion = "";
+function fileText(f) {
+  const limit = { gemini: 250000, openrouter: 30000, claude: 400000 }[settings.provider] || 100000;
+  const t = f.text || "";
+  if (t.length <= limit) return t;
+  const size = 4000;
+  const chunks = [];
+  for (let i = 0; i < t.length; i += size) chunks.push(t.slice(i, i + size));
+  const words = [...new Set(currentQuestion.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || [])];
+  const scored = chunks.map((c, i) => {
+    const low = c.toLowerCase();
+    let score = i === 0 ? 1e6 : 0;
+    for (const w of words) score += low.split(w).length - 1;
+    return { i, score };
+  });
+  const keep = new Set();
+  let used = 0;
+  for (const { i } of scored.sort((a, b) => b.score - a.score)) {
+    if (used + size > limit) break;
+    keep.add(i);
+    used += size;
+  }
+  return `(This file is long: ${chunks.length} parts. Only the ${keep.size} parts most related to the question are included. If the answer isn't here, say which part might have it and ask the user to ask about that part.)\n\n` +
+    [...keep].sort((a, b) => a - b).map((i) => `[Part ${i + 1} of ${chunks.length}]\n${chunks[i]}`).join("\n\n");
+}
 const TEXT_EXT = /\.(txt|md|csv|json|js|ts|py|java|c|cpp|h|html|css|xml|yml|yaml|sql|sh|log)$/i;
 
 async function addFiles(fileList) {
@@ -638,12 +909,31 @@ async function addFiles(fileList) {
         }
         const data = (await readAs(file, "dataurl")).split(",")[1];
         pendingFiles.push({ kind: "pdf", mime: "application/pdf", data, name: file.name });
+      } else if (/\.docx$/i.test(file.name) || file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+        if (file.size > MAX_FILE_MB * 1e6) {
+          toast(`${file.name} is too big (max ${MAX_FILE_MB} MB).`);
+          continue;
+        }
+        const text = await readDocx(file);
+        if (!text.trim()) {
+          toast(`${file.name}: is Word file mein koi text nahi mila (shayad sirf photos hain).`);
+          continue;
+        }
+        pendingFiles.push({ kind: "text", mime: "text/plain", text: text.slice(0, MAX_TEXT), name: file.name });
+        if (text.length > MAX_TEXT) toast(`${file.name} is very long; S kept the first ${Math.round(MAX_TEXT / 1000)}k characters.`);
       } else if (file.type.startsWith("text/") || TEXT_EXT.test(file.name)) {
+        if (file.size > MAX_FILE_MB * 1e6) {
+          toast(`${file.name} is too big (max ${MAX_FILE_MB} MB).`);
+          continue;
+        }
         let text = await readAs(file, "text");
-        if (text.length > 300000) text = text.slice(0, 300000) + "\n…(file cut off here)";
+        if (text.length > MAX_TEXT) {
+          text = text.slice(0, MAX_TEXT) + "\n…(file cut off here)";
+          toast(`${file.name} is very long; S kept the first ${Math.round(MAX_TEXT / 1000)}k characters.`);
+        }
         pendingFiles.push({ kind: "text", mime: "text/plain", text, name: file.name });
       } else {
-        toast(`${file.name}: S can read photos, PDFs and text files.`);
+        toast(`${file.name}: S can read photos, PDF, Word (.docx), TXT and Markdown files.`);
       }
     } catch (err) {
       console.error(err);
@@ -766,11 +1056,13 @@ micBtn.onclick = () => {
   };
   recog.onend = () => {
     recog = null;
+    if (!voiceMode) voiceUI("off");
     micBtn.classList.remove("listening");
     micBtn.setAttribute("aria-label", "Voice typing");
   };
   try {
     recog.start();
+    voiceUI("typing");
     micBtn.classList.add("listening");
     micBtn.setAttribute("aria-label", "Stop listening");
   } catch (err) {
@@ -839,6 +1131,7 @@ async function send(text) {
   stopMic();
   const files = pendingFiles;
   pendingFiles = [];
+  currentQuestion = text;
   renderPending();
 
   if (!currentChat) {
@@ -859,7 +1152,7 @@ async function send(text) {
     const sub = detectSubject(text + " " + files.map((f) => f.name).join(" "));
     if (sub !== "general") {
       chat.subject = sub;
-      applySubject(sub);
+      applySubject(themeFor(sub));
       updateSubjectUI();
     }
   }
@@ -871,13 +1164,54 @@ async function send(text) {
 
   input.value = "";
   autoGrow();
-  addMessage("user", text, files);
+  addMessage("user", text, files, chat.messages.length - 1);
+  return answer(chat, userMsg, null);
+}
+
+// Ask again for the last question (removes the old answer first).
+async function regenerate() {
+  const chat = currentChat;
+  if (!chat || controller) return;
+  let i = chat.messages.length - 1;
+  while (i >= 0 && chat.messages[i].role !== "user") i--;
+  if (i < 0) return;
+  const removed = chat.messages.splice(i + 1);
+  renderMessages(chat);
+  currentQuestion = textOf(chat.messages[i].content);
+  return answer(chat, chat.messages[i], removed);
+}
+
+// Edit an earlier question: everything after it is removed, and the text goes back into the box.
+async function editPrompt(wrap) {
+  const chat = currentChat;
+  const i = +wrap.dataset.index;
+  if (!chat || controller || !(i >= 0) || chat.messages[i]?.role !== "user") return;
+  const later = chat.messages.length - i - 1;
+  if (later > 1 && !confirm("Is message ke baad ke saare jawab hat jaayenge. Edit karein?")) return;
+  const m = chat.messages[i];
+  chat.messages.splice(i);
+  if (chat.messages.length) await saveChat(chat);
+  else await db.del(chat.id);
+  renderMessages(chat);
+  input.value = textOf(m.content) === "(see attachment)" ? "" : textOf(m.content);
+  pendingFiles = (m.attachments || []).map((f) => structuredClone(f));
+  renderPending();
+  autoGrow();
+  input.focus();
+  renderSidebar();
+  toast("✏️ Message edit karo aur ➤ dabao");
+}
+
+async function answer(chat, userMsg, removed) {
+  const files = userMsg.attachments || [];
   const bubble = addMessage("assistant", "");
   const status = document.createElement("div");
   status.className = "status";
-  status.textContent = files.length ? "Reading your files…" : "Thinking…";
+  status.innerHTML = '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span> ';
+  status.append(files.length ? "Reading your files…" : "Thinking…");
   bubble.after(status);
   scrollToBottom(true);
+  voiceUI("thinking");
 
   controller = new AbortController();
   const signal = controller.signal;
@@ -898,7 +1232,7 @@ async function send(text) {
       requestAnimationFrame(paint);
     }
   };
-  const onStatus = (t) => (status.textContent = t);
+  const onStatus = (t) => (status.lastChild.textContent = t);
   const sources = [];
   const addSource = (src) => {
     const at = sources.findIndex((x) => x.url === src.url);
@@ -907,6 +1241,7 @@ async function send(text) {
     return sources.length;
   };
   const ui = { onText, onStatus, signal, addSource };
+  let failed = false;
 
   try {
     // Fallback: if the chosen brain fails before answering, try the other brains you have keys for.
@@ -930,40 +1265,77 @@ async function send(text) {
       }
     }
     if (firstErr) throw firstErr;
+    if (!full.trim()) {
+      const e = new Error("empty");
+      e.empty = true;
+      throw e;
+    }
     const last = chat.messages.at(-1);
     if (sources.length && last?.role === "assistant") {
       last.sources = sources;
       await saveChat(chat);
     }
   } catch (err) {
-    // Remove the unanswered message so the next one still works.
-    if (chat.messages.at(-1) === userMsg) {
+    failed = true;
+    // Put the chat back the way it was, so nothing is lost and the next message still works.
+    if (removed) {
+      while (chat.messages.length && chat.messages.at(-1) !== userMsg) chat.messages.pop();
+      chat.messages.push(...removed);
+      await saveChat(chat);
+    } else if (chat.messages.at(-1) === userMsg) {
       chat.messages.pop();
       if (chat.messages.length) await saveChat(chat);
-      else {
-        await db.del(chat.id);
-        if (currentChat === chat) currentChat = null;
-      }
+      else await db.del(chat.id).catch(() => {});
+    } else if (chat.messages.at(-1)?.role === "assistant" && full) {
+      await saveChat(chat); // part of an answer arrived: keep it
+      failed = false;
     }
     if (!signal.aborted) {
       console.error(err);
       if (full) paint();
-      const e = document.createElement("p");
+      const e = document.createElement("div");
       e.className = "error";
-      e.textContent = `⚠ ${err instanceof FreeError ? err.message : friendlyError(err)}`;
+      const msg = document.createElement("p");
+      msg.textContent = err.empty
+        ? "⚠ S ko khaali jawab mila (AI ne kuch nahi bheja). Dobara try karo ya ⚙ mode/model badlo."
+        : `⚠ ${err instanceof FreeError ? err.message : friendlyError(err)}`;
+      const retry = document.createElement("button");
+      retry.type = "button";
+      retry.className = "act-btn";
+      retry.textContent = "↻ Retry";
+      retry.onclick = () => {
+        if (controller) return;
+        if (removed) {
+          renderMessages(chat);
+          regenerate();
+          return;
+        }
+        // The question was taken back out of the chat: send it again.
+        const msgEl = bubble.closest(".msg");
+        msgEl.previousElementSibling?.classList.contains("user") && msgEl.previousElementSibling.remove();
+        msgEl.remove();
+        pendingFiles = files.map((f) => structuredClone(f));
+        send(textOf(userMsg.content) === "(see attachment)" ? "" : textOf(userMsg.content));
+      };
+      e.append(msg, retry);
       bubble.appendChild(e);
       if (err instanceof Anthropic.AuthenticationError || err?.badKey) openSettings("That key didn't work. Paste a valid key.");
-    }
+    } else if (removed && !full) renderMessages(chat);
   } finally {
     if (full && !bubble.querySelector(".error")) {
       paint();
       addExtras(bubble, () => full, sources);
+      refreshRegen();
     }
     if (!full && !bubble.querySelector(".error")) bubble.closest(".msg").remove();
     status.remove();
     controller = null;
     setBusy(false);
     renderSidebar();
+    if (voiceMode) {
+      if (full && !failed) readAloud(full, null, () => voiceMode && listenForVoice());
+      else stopVoiceMode();
+    }
   }
 }
 
@@ -997,6 +1369,17 @@ async function runTool(name, args, ui) {
     onStatus("Thinking…");
     return text;
   }
+  if (name === PLOT_TOOL.name) {
+    onStatus("📈 Drawing the graph with SymPy…");
+    const r = await runPlot(args, signal);
+    if (signal.aborted) throw new DOMException("Stopped", "AbortError");
+    onStatus("Thinking…");
+    if (r.error) return r.error;
+    const ok = r.series.filter((x) => x.points.some(Boolean));
+    if (!ok.length) return "Error: none of the expressions could be drawn (maybe not real numbers in this range). Try another range.";
+    onText("\n\n```s-graph\n" + JSON.stringify({ title: String(args?.title || "").slice(0, 80), series: ok }) + "\n```\n\n");
+    return `Graph shown to the user under your answer (${ok.map((x) => x.label).join(", ")}, x from ${args?.xmin ?? -10} to ${args?.xmax ?? 10}). Don't describe drawing it; just refer to it.`;
+  }
   if (name === MEMORY_TOOL.name) {
     const r = rememberFact(args?.fact);
     if (r === "Saved to memory.") toast("🧠 Memory saved: " + String(args?.fact).slice(0, 80));
@@ -1004,7 +1387,7 @@ async function runTool(name, args, ui) {
   }
   return "Error: unknown tool.";
 }
-const customTools = () => [...(sympyOn() ? [SYMPY_TOOL] : []), ...(searchOn() ? WEB_TOOLS : []), ...(settings.memoryOn ? [MEMORY_TOOL] : [])];
+const customTools = () => [...(sympyOn() ? [SYMPY_TOOL, PLOT_TOOL] : []), ...(searchOn() ? WEB_TOOLS : []), ...(settings.memoryOn ? [MEMORY_TOOL] : [])];
 // Errors where trying another model makes sense (busy, quota, missing model, network).
 const retryable = (status) => !status || [404, 408, 429, 500, 502, 503, 504, 529].includes(status);
 
@@ -1040,7 +1423,7 @@ function claudeMessages(chat) {
       if (f.kind === "image") blocks.push({ type: "image", source: { type: "base64", media_type: f.mime, data: f.data } });
       else if (f.kind === "pdf")
         blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: f.data } });
-      else blocks.push({ type: "text", text: `File "${f.name}":\n${f.text}` });
+      else blocks.push({ type: "text", text: `File "${f.name}":\n${fileText(f)}` });
     }
     blocks.push({ type: "text", text: m.content });
     return { role: "user", content: blocks };
@@ -1201,7 +1584,7 @@ function geminiContents(chat) {
     if (m.attachments?.length) {
       if (keep.has(i)) {
         for (const f of m.attachments) {
-          if (f.kind === "text") parts.push({ text: `File "${f.name}":\n${f.text}` });
+          if (f.kind === "text") parts.push({ text: `File "${f.name}":\n${fileText(f)}` });
           else parts.push({ inline_data: { mime_type: f.mime, data: f.data } });
         }
       } else parts.push({ text: fileNote(m.attachments) });
@@ -1340,7 +1723,7 @@ function openrouterMessages(chat) {
         if (f.kind === "image") parts.push({ type: "image_url", image_url: { url: `data:${f.mime};base64,${f.data}` } });
         else if (f.kind === "pdf")
           parts.push({ type: "file", file: { filename: f.name, file_data: `data:application/pdf;base64,${f.data}` } });
-        else parts.push({ type: "text", text: `File "${f.name}":\n${f.text}` });
+        else parts.push({ type: "text", text: `File "${f.name}":\n${fileText(f)}` });
       }
       parts.push({ type: "text", text });
       return { role: m.role, content: parts };
@@ -1438,6 +1821,16 @@ function openSettings(note = "") {
   $("#set-personality").value = settings.personality;
   $("#set-sympy").checked = settings.sympy;
   $("#set-memory").checked = settings.memoryOn !== false;
+  $("#set-themes").checked = settings.subjectThemes !== false;
+  $("#set-language").value = settings.language;
+  $("#set-style").value = settings.style;
+  $("#set-level").value = settings.level;
+  $("#set-wstyle").value = settings.writingStyle;
+  $("#set-rate").value = settings.voiceRate || 1;
+  $("#rate-val").textContent = (+settings.voiceRate || 1).toFixed(1) + "×";
+  fillVoices();
+  document.querySelectorAll(".key-status").forEach((x) => (x.textContent = ""));
+  showStorage();
   renderMemory();
   showProviderFields();
   if (!dialog.open) dialog.showModal();
@@ -1459,10 +1852,19 @@ $("#settings-form").addEventListener("submit", (e) => {
     personality: $("#set-personality").value.trim(),
     sympy: $("#set-sympy").checked,
     memoryOn: $("#set-memory").checked,
+    subjectThemes: $("#set-themes").checked,
+    language: $("#set-language").value,
+    style: $("#set-style").value,
+    level: $("#set-level").value,
+    writingStyle: $("#set-wstyle").value,
+    voiceName: $("#set-voicename").value,
+    voiceRate: +$("#set-rate").value || 1,
     mode: settings.mode,
     v2: true,
     v3: true,
+    v5: true,
   };
+  applySubject(themeFor(currentChat?.subject));
   if (!prefs.set("settings", settings)) toast("Couldn't save settings in this browser; they'll last until you close the tab.");
   renderSidebar();
 });
@@ -1529,7 +1931,7 @@ function onTyping() {
   autoGrow();
 }
 const touchDevice = matchMedia("(pointer: coarse)").matches;
-if (touchDevice) $(".hint").textContent = "Tap ➤ to send · 🎤 to talk · ＋ for photos & files";
+if (touchDevice) $(".hint").textContent = "Tap ➤ to send · 🎤 voice typing · 🗣 voice chat · ＋ photos, PDF, Word";
 input.addEventListener("input", onTyping);
 input.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !touchDevice) {
@@ -1545,7 +1947,28 @@ stopBtn.onclick = () => controller?.abort();
 $("#new-chat").onclick = () => openChat(null);
 $("#open-settings").onclick = () => openSettings();
 document.querySelectorAll(".suggestions button").forEach((b) => (b.onclick = () => send(b.dataset.q || b.textContent)));
-$("#open-side").onclick = () => document.body.classList.add("side-open");
+const wide = () => matchMedia("(min-width: 761px)").matches;
+$("#open-side").onclick = () => {
+  if (wide()) {
+    document.body.classList.remove("side-collapsed");
+    prefs.set("sideCollapsed", false);
+  } else document.body.classList.add("side-open");
+};
+$("#collapse-side").onclick = () => {
+  document.body.classList.add("side-collapsed");
+  prefs.set("sideCollapsed", true);
+};
+if (prefs.get("sideCollapsed", false)) document.body.classList.add("side-collapsed");
+// Scroll-to-bottom button
+const toBottom = $("#to-bottom");
+messagesEl.addEventListener(
+  "scroll",
+  () => {
+    toBottom.hidden = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 300;
+  },
+  { passive: true },
+);
+toBottom.onclick = () => messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "smooth" });
 $("#close-side").onclick = $("#scrim").onclick = () => document.body.classList.remove("side-open");
 
 // ---------- Sidebar views: History (chat list) and Library (all uploaded files) ----------
@@ -1574,19 +1997,154 @@ $("#nav-library").onclick = () => {
 };
 $("#chat-search").addEventListener("input", () => renderSidebar());
 
+// ---------- Voice conversation: listen → answer → speak → listen again ----------
+let voiceMode = false;
+let voiceRecog = null;
+function voiceUI(state) {
+  const pill = $("#voice-pill");
+  const txt = { listening: "🎙 Sun raha hoon… bolo", thinking: "🤔 Soch raha hoon…", speaking: "🔊 Bol raha hoon…", typing: "🎙 Mic on: bolo, phir 🎤 dabake roko" }[state];
+  if (state === "thinking" && !voiceMode) return;
+  pill.hidden = !txt;
+  pill.dataset.state = state;
+  if (txt) $("#vp-text").textContent = txt;
+  $("#voice-mode").classList.toggle("listening", voiceMode);
+}
+function listenForVoice() {
+  if (!voiceMode) return;
+  if (!SR) {
+    toast("Is browser mein voice chat nahi chalta. Chrome (Android) ya Safari (iPhone) use karo.");
+    return stopVoiceMode();
+  }
+  voiceRecog = new SR();
+  voiceRecog.lang = settings.voiceLang;
+  voiceRecog.interimResults = true;
+  voiceRecog.continuous = false;
+  let heard = "";
+  voiceRecog.onresult = (e) => {
+    heard = [...e.results].map((r) => r[0].transcript).join("");
+    input.value = heard;
+    autoGrow();
+  };
+  voiceRecog.onerror = (e) => {
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+      toast("🎙 Mic ki permission band hai. Browser settings mein microphone allow karo.");
+      stopVoiceMode();
+    } else if (e.error === "network") {
+      toast("Voice ke liye internet chahiye.");
+      stopVoiceMode();
+    }
+  };
+  voiceRecog.onend = () => {
+    voiceRecog = null;
+    if (!voiceMode) return;
+    if (heard.trim()) send(heard);
+    else {
+      toast("Kuch sunai nahi diya. 🗣 dabake phir se bolo.");
+      stopVoiceMode();
+    }
+  };
+  try {
+    voiceRecog.start();
+    voiceUI("listening");
+  } catch {
+    toast("Mic start nahi ho paaya.");
+    stopVoiceMode();
+  }
+}
+function stopVoiceMode() {
+  voiceMode = false;
+  try {
+    voiceRecog?.abort();
+  } catch {}
+  voiceRecog = null;
+  stopSpeaking();
+  voiceUI("off");
+}
+$("#voice-mode").onclick = () => {
+  if (voiceMode) return stopVoiceMode();
+  if (!activeKey()) return openSettings("Paste your API key first.");
+  stopMic();
+  voiceMode = true;
+  stopSpeaking();
+  listenForVoice();
+};
+$("#vp-stop").onclick = () => {
+  if (voiceMode) stopVoiceMode();
+  else {
+    stopMic();
+    stopSpeaking();
+    voiceUI("off");
+  }
+};
+
+let libTab = "files";
+document.querySelectorAll(".lib-tab").forEach(
+  (t) =>
+    (t.onclick = () => {
+      libTab = t.dataset.tab;
+      document.querySelectorAll(".lib-tab").forEach((x) => {
+        x.classList.toggle("active", x === t);
+        x.setAttribute("aria-selected", String(x === t));
+      });
+      renderLibrary();
+    }),
+);
+$("#lib-search").addEventListener("input", () => renderLibrary());
+const download = (name, text, type = "text/markdown") => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => (URL.revokeObjectURL(a.href), a.remove()), 1000);
+};
+const safeName = (t) => (String(t).replace(/[^\p{L}\p{N} _-]+/gu, "").trim().slice(0, 50) || "note").replace(/\s+/g, "-");
+function noteDialog(note) {
+  return new Promise((resolve) => {
+    const d = $("#note-dlg");
+    $("#note-dlg-title").textContent = note ? "✏️ Edit" : "📝 New note";
+    $("#note-title").value = note?.title || "";
+    $("#note-body").value = note?.text || "";
+    d.onclose = () => resolve(d.returnValue === "save" ? { title: $("#note-title").value.trim() || "Untitled note", text: $("#note-body").value } : null);
+    d.returnValue = "";
+    d.showModal();
+    $("#note-title").focus();
+  });
+}
+$("#lib-new-note").onclick = async () => {
+  const r = await noteDialog(null);
+  if (!r) return;
+  try {
+    await db.putNote({ id: newId(), type: "note", title: r.title.slice(0, 120), text: r.text, createdAt: Date.now() });
+  } catch {
+    toast("⚠ Note save nahi ho paaya (storage full?)");
+  }
+  renderLibrary();
+};
+$("#lib-export").onclick = async () => {
+  const want = libTab === "saved" ? "answer" : "note";
+  const items = (await db.notes()).filter((n) => n.type === want);
+  if (!items.length) return toast("Export karne ke liye kuch nahi hai.");
+  download(`project-s-${want === "answer" ? "saved-answers" : "notes"}.md`, items.map((n) => `# ${n.title}\n\n${n.text}\n`).join("\n---\n\n"));
+};
+
 async function renderLibrary() {
   const list = $("#lib-list");
+  const q = $("#lib-search").value.trim().toLowerCase();
+  $("#lib-new-note").hidden = libTab !== "notes";
+  $("#lib-export").hidden = libTab === "files";
   list.innerHTML = '<p class="side-empty">Loading…</p>';
+  if (libTab !== "files") return renderNotes(list, q);
   const items = [];
   for (const meta of await db.list()) {
     if (meta.fileCount === 0) continue;
     const chat = await db.get(meta.id);
     for (const m of chat?.messages || [])
-      for (const f of m.attachments || []) items.push({ f, chat: meta, at: meta.updatedAt });
+      for (const f of m.attachments || []) if (!q || f.name.toLowerCase().includes(q) || meta.title.toLowerCase().includes(q)) items.push({ f, chat: meta, at: meta.updatedAt });
   }
   list.innerHTML = "";
   if (!items.length) {
-    list.innerHTML = '<p class="side-empty">Abhi koi file nahi. Chat mein ＋ dabake photo, PDF ya notes bhejo, wo yahan dikhengi.</p>';
+    list.innerHTML = q ? '<p class="side-empty">Kuch nahi mila.</p>' : '<p class="side-empty">Abhi koi file nahi. Chat mein ＋ dabake photo, PDF, Word ya notes bhejo, wo yahan dikhengi.</p>';
     return;
   }
   for (const { f, chat } of items) {
@@ -1598,12 +2156,16 @@ async function renderLibrary() {
       const img = document.createElement("img");
       img.src = `data:${f.mime};base64,${f.data}`;
       img.alt = f.name;
+      img.loading = "lazy";
       thumb.appendChild(img);
-    } else thumb.textContent = f.kind === "pdf" ? "📄" : "📝";
+    } else thumb.textContent = f.kind === "pdf" ? "📄" : /\.docx$/i.test(f.name) ? "📘" : "📝";
     const info = document.createElement("div");
     info.className = "lib-info";
     const name = document.createElement("b");
     name.textContent = f.name;
+    const size = document.createElement("small");
+    const bytes = f.kind === "text" ? f.text.length : Math.round((f.data?.length || 0) * 0.75);
+    size.textContent = bytes > 1e6 ? (bytes / 1e6).toFixed(1) + " MB" : Math.max(1, Math.round(bytes / 1e3)) + " KB";
     const from = document.createElement("a");
     from.href = "#";
     from.textContent = `From: ${chat.title}`;
@@ -1613,8 +2175,9 @@ async function renderLibrary() {
     };
     const acts = document.createElement("div");
     acts.className = "lib-acts";
-    for (const [label, q] of [
+    for (const [label, q2] of [
       ["📝 Summarize", "Is file ka simple summary banao: main points, short mein."],
+      ["📒 Notes", "Is file se revision ke liye study notes banao: headings, short points, important formulas/definitions, aur end mein 5 quick questions."],
       ["❓ Ask a question", ""],
     ]) {
       const b = document.createElement("button");
@@ -1625,7 +2188,7 @@ async function renderLibrary() {
         await openChat(null);
         pendingFiles = [structuredClone(f)];
         renderPending();
-        if (q) send(q);
+        if (q2) send(q2);
         else {
           input.placeholder = `"${f.name}" ke baare mein poocho…`;
           input.focus();
@@ -1633,8 +2196,81 @@ async function renderLibrary() {
       };
       acts.appendChild(b);
     }
-    info.append(name, from, acts);
+    info.append(name, size, from, acts);
     card.append(thumb, info);
+    list.appendChild(card);
+  }
+}
+
+async function renderNotes(list, q) {
+  const want = libTab === "saved" ? "answer" : "note";
+  const items = (await db.notes()).filter((n) => n.type === want && (!q || n.title.toLowerCase().includes(q) || n.text.toLowerCase().includes(q)));
+  list.innerHTML = "";
+  if (!items.length) {
+    list.innerHTML = q
+      ? '<p class="side-empty">Kuch nahi mila.</p>'
+      : want === "answer"
+        ? '<p class="side-empty">Abhi koi saved answer nahi. Kisi bhi jawab ke neeche ⭐ Save dabao.</p>'
+        : '<p class="side-empty">Abhi koi note nahi. ＋ New note dabao.</p>';
+    return;
+  }
+  for (const n of items) {
+    const card = document.createElement("article");
+    card.className = "note-card";
+    const head = document.createElement("div");
+    head.className = "note-head";
+    const t = document.createElement("b");
+    t.textContent = n.title;
+    const when = document.createElement("small");
+    when.textContent = new Date(n.updatedAt).toLocaleDateString();
+    head.append(t, when);
+    const body = document.createElement("div");
+    body.className = "note-body bubble collapsed";
+    body.innerHTML = renderMarkdown(n.text);
+    decorate(body);
+    const acts = document.createElement("div");
+    acts.className = "lib-acts";
+    const btn = (label, fn) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip-btn";
+      b.textContent = label;
+      b.onclick = fn;
+      acts.appendChild(b);
+      return b;
+    };
+    const more = btn("⤢ Open", () => {
+      body.classList.toggle("collapsed");
+      more.textContent = body.classList.contains("collapsed") ? "⤢ Open" : "⤡ Close";
+    });
+    if (n.type === "note")
+      btn("✏️ Edit", async () => {
+        const r = await noteDialog(n);
+        if (!r) return;
+        Object.assign(n, { title: r.title.slice(0, 120), text: r.text });
+        await db.putNote(n);
+        renderLibrary();
+      });
+    else
+      btn("✏️ Rename", async () => {
+        const v = prompt("Naya naam:", n.title);
+        if (!v?.trim()) return;
+        n.title = v.trim().slice(0, 120);
+        await db.putNote(n);
+        renderLibrary();
+      });
+    if (n.chatId)
+      btn("💬 Chat", async () => {
+        if (await db.get(n.chatId)) openChat(n.chatId);
+        else toast("Wo chat ab nahi hai (delete ho gayi).");
+      });
+    btn("⬇ Export", () => download(safeName(n.title) + ".md", `# ${n.title}\n\n${n.text}\n`));
+    btn("🗑 Delete", async () => {
+      if (!confirm(`"${n.title}" delete karein?`)) return;
+      await db.delNote(n.id);
+      renderLibrary();
+    });
+    card.append(head, body, acts);
     list.appendChild(card);
   }
 }
@@ -1698,7 +2334,8 @@ $("#export-chats").onclick = async () => {
     const c = await db.get(m.id);
     if (c) chats.push(c);
   }
-  const blob = new Blob([JSON.stringify({ app: "Project S", version: 4, exportedAt: new Date().toISOString(), chats, memory }, null, 1)], { type: "application/json" });
+  const notes = await db.notes().catch(() => []);
+  const blob = new Blob([JSON.stringify({ app: "Project S", version: 5, exportedAt: new Date().toISOString(), chats, memory, notes }, null, 1)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `project-s-backup-${new Date().toISOString().slice(0, 10)}.json`;
@@ -1725,6 +2362,7 @@ $("#import-file").onchange = async (e) => {
       if (keep) c.updatedAt = keep;
     }
     if (Array.isArray(data.memory)) for (const m of data.memory) if (m?.text) rememberFact(m.text);
+    if (Array.isArray(data.notes)) for (const n of data.notes) if (n?.id && n.text != null) await db.putNote({ ...n, title: String(n.title || "Note").slice(0, 120) });
     renderMemory();
     renderSidebar();
     toast(`✅ ${n} chats restored.`);
@@ -1738,7 +2376,7 @@ function renderMemory() {
   if (!memory.length) {
     const p = document.createElement("p");
     p.className = "small";
-    p.textContent = "Abhi kuch yaad nahi. Chat mein bolo \"yaad rakhna, main class 12 mein hoon\".";
+    p.textContent = "Abhi kuch yaad nahi. Chat mein bolo \"yaad rakhna, main class 12 mein hoon\", ya neeche khud add karo.";
     list.appendChild(p);
   }
   for (const m of memory) {
@@ -1746,6 +2384,19 @@ function renderMemory() {
     row.className = "mem-row";
     const t = document.createElement("span");
     t.textContent = m.text;
+    const ed = document.createElement("button");
+    ed.type = "button";
+    ed.className = "del";
+    ed.textContent = "✏️";
+    ed.title = "Edit";
+    ed.onclick = () => {
+      const v = prompt("Memory edit karo:", m.text);
+      if (v == null) return;
+      if (!v.trim()) memory = memory.filter((y) => y.id !== m.id);
+      else m.text = v.trim().slice(0, 300);
+      saveMemory();
+      renderMemory();
+    };
     const x = document.createElement("button");
     x.type = "button";
     x.className = "del";
@@ -1756,29 +2407,177 @@ function renderMemory() {
       saveMemory();
       renderMemory();
     };
-    row.append(t, x);
+    row.append(t, ed, x);
     list.appendChild(row);
   }
 }
+$("#mem-add").onclick = () => {
+  const v = $("#mem-new").value.trim();
+  if (!v) return;
+  rememberFact(v);
+  $("#mem-new").value = "";
+  renderMemory();
+};
+$("#mem-new").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    $("#mem-add").click();
+  }
+});
+
+// ---------- Settings helpers: voices, storage, key test ----------
+function fillVoices() {
+  const sel = $("#set-voicename");
+  const voices = window.speechSynthesis?.getVoices() || [];
+  sel.innerHTML = "";
+  sel.add(new Option("Auto (language ke hisaab se)", ""));
+  for (const v of voices.filter((v) => /^(hi|en)/i.test(v.lang))) sel.add(new Option(`${v.name} (${v.lang})`, v.name));
+  sel.value = voices.some((v) => v.name === settings.voiceName) ? settings.voiceName : "";
+  sel.disabled = !window.speechSynthesis;
+}
+if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = () => dialog.open && fillVoices();
+$("#set-rate").oninput = (e) => ($("#rate-val").textContent = (+e.target.value).toFixed(1) + "×");
+$("#test-voice").onclick = () => {
+  const old = { voiceName: settings.voiceName, voiceRate: settings.voiceRate };
+  settings.voiceName = $("#set-voicename").value;
+  settings.voiceRate = +$("#set-rate").value;
+  readAloud("Namaste! Main S hoon. Aapka personal AI assistant.", null, () => {});
+  voiceUI(voiceMode ? "speaking" : "off");
+  Object.assign(settings, old);
+};
+async function showStorage() {
+  const el = $("#storage-info");
+  try {
+    const [est, chats, notes] = await Promise.all([navigator.storage?.estimate?.(), db.list(), db.notes()]);
+    const persisted = await navigator.storage?.persisted?.();
+    const mb = (n) => (n / 1e6).toFixed(1) + " MB";
+    el.textContent = `💽 Storage: ${chats.length} chats, ${notes.length} Library items, ${memory.length} memories` + (est ? ` · ${mb(est.usage || 0)} used of about ${mb(est.quota || 0)}` : "") + (persisted ? " · protected from auto-cleanup ✅" : "") + ". Sab kuch sirf isi browser mein hai.";
+  } catch {
+    el.textContent = "💽 Storage info isn't available in this browser.";
+  }
+}
+const KEY_FIELDS = { gemini: "#set-gkey", openrouter: "#set-okey", claude: "#set-key" };
+async function testKey(brain, key) {
+  if (!key) return "❌ Pehle key paste karo.";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res =
+      brain === "gemini"
+        ? await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", { headers: { "x-goog-api-key": key }, signal: ctrl.signal })
+        : brain === "openrouter"
+          ? await fetch("https://openrouter.ai/api/v1/key", { headers: { Authorization: "Bearer " + key }, signal: ctrl.signal })
+          : await fetch("https://api.anthropic.com/v1/models?limit=1", { headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }, signal: ctrl.signal });
+    if (res.ok) return "✅ Key sahi hai, connect ho gaya.";
+    if ([400, 401, 403].includes(res.status)) return `❌ Key reject ho gayi (${res.status}). Sahi key copy-paste karo.`;
+    if (res.status === 429) return "⚠ Key sahi lagti hai, par abhi limit khatam hai. Thodi der baad try karo.";
+    return `⚠ Provider ne error diya (${res.status}). Thodi der baad try karo.`;
+  } catch {
+    return "⚠ Provider tak nahi pahunch paaye. Internet check karo.";
+  } finally {
+    clearTimeout(timer);
+  }
+}
+for (const [brain, sel] of Object.entries(KEY_FIELDS)) {
+  const box = $(sel).closest(".key-row").nextElementSibling;
+  if (!box?.classList.contains("key-tools")) continue;
+  const status = box.querySelector(".key-status");
+  box.querySelector(".test-key").onclick = async () => {
+    status.textContent = "⏳ Checking…";
+    status.textContent = await testKey(brain, $(sel).value.trim());
+  };
+  box.querySelector(".remove-key").onclick = () => {
+    if (!$(sel).value && !keyFor(brain)) return;
+    if (!confirm("Ye key is browser se hata dein?")) return;
+    $(sel).value = "";
+    settings[{ gemini: "geminiKey", openrouter: "openrouterKey", claude: "claudeKey" }[brain]] = "";
+    saveSettings();
+    status.textContent = "🗑 Key hata di gayi.";
+    renderSidebar();
+  };
+}
+document.querySelectorAll(".set-tabs a").forEach(
+  (a) =>
+    (a.onclick = (e) => {
+      e.preventDefault();
+      $(a.getAttribute("href")).scrollIntoView({ behavior: "smooth", block: "start" });
+    }),
+);
+
+// ---------- About ----------
+const about = $("#about");
+document.querySelectorAll(".open-about").forEach(
+  (b) =>
+    (b.onclick = () => {
+      document.body.classList.remove("side-open");
+      if (dialog.open) dialog.close();
+      about.showModal();
+    }),
+);
+$(".about-x").onclick = () => about.close();
 
 // ---------- Mode + model selector ----------
 const modeMenu = $("#mode-menu");
+for (const [key, m] of Object.entries(MODES)) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "mode-opt";
+  b.dataset.mode = key;
+  const t = document.createElement("b");
+  t.textContent = m.label;
+  const d = document.createElement("span");
+  d.textContent = m.desc;
+  b.append(t, d);
+  b.onclick = () => setMode(key);
+  $("#mode-list").appendChild(b);
+}
+function setMode(key, quiet = false) {
+  settings.mode = key;
+  saveSettings();
+  updateModeUI();
+  if (!quiet) {
+    modeMenu.hidden = true;
+    toast(`${MODES[mode()].label} mode · ${activeModel()}` + (key === "research" ? " · web search on" : ""));
+  }
+}
 function updateModeUI() {
   $("#mode-btn").textContent = `${MODES[mode()].label} ▾`;
   document.querySelectorAll(".mode-opt").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode()));
+  document.querySelectorAll(".mode-link").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode()));
+  // Extra choice for some modes
+  const extra = $("#mode-extra");
+  extra.innerHTML = "";
+  const choice = (label, opts, key) => {
+    const l = document.createElement("label");
+    l.className = "menu-label";
+    l.textContent = label;
+    const sel = document.createElement("select");
+    for (const [v, t] of Object.entries(opts)) sel.add(new Option(t, v));
+    sel.value = settings[key];
+    sel.onchange = () => {
+      settings[key] = sel.value;
+      saveSettings();
+    };
+    l.appendChild(sel);
+    extra.appendChild(l);
+  };
+  if (mode() === "study") choice("Level", LEVELS, "level");
+  if (mode() === "writing") {
+    choice("Style", WRITING_STYLES, "writingStyle");
+    choice("Language", { auto: "Auto", hinglish: "Hinglish", hindi: "हिंदी", english: "English" }, "language");
+  }
+  $("#brain-pick").value = settings.provider;
   const pick = $("#model-pick");
-  const opts =
-    settings.provider === "gemini" ? GEMINI_FREE : settings.provider === "claude" ? CLAUDE_MODELS : [];
+  const opts = settings.provider === "gemini" ? GEMINI_FREE : settings.provider === "claude" ? CLAUDE_MODELS : [];
   const current = settings.provider === "gemini" ? settings.geminiModel : settings.model;
   pick.innerHTML = "";
-  const auto = new Option(`Auto (${activeModel()})`, "auto");
-  pick.add(auto);
+  pick.add(new Option(`Auto (${activeModel()})`, "auto"));
   for (const m of opts) pick.add(new Option(MODEL_NAMES[m] || m, m));
   pick.value = settings.provider === "openrouter" ? "auto" : opts.includes(current) ? current : "auto";
   pick.disabled = settings.provider === "openrouter";
   const web = $("#web-toggle");
   web.setAttribute("aria-pressed", String(searchOn()));
-  web.textContent = `🌐 Web search: ${searchOn() ? "On" : "Off"}`;
+  web.textContent = `🌐 Web search: ${searchOn() ? "On" : "Off"}` + (mode() === "research" && !settings.webSearch ? " (Research)" : "");
 }
 $("#mode-btn").onclick = (e) => {
   e.stopPropagation();
@@ -1788,14 +2587,28 @@ $("#mode-btn").onclick = (e) => {
 document.addEventListener("click", (e) => {
   if (!modeMenu.hidden && !modeMenu.contains(e.target) && e.target !== $("#mode-btn")) modeMenu.hidden = true;
 });
-document.querySelectorAll(".mode-opt").forEach(
+$("#brain-pick").onchange = (e) => {
+  const brain = e.target.value;
+  if (!keyFor(brain)) {
+    modeMenu.hidden = true;
+    e.target.value = settings.provider;
+    openSettings(`${BRAIN_NAMES[brain]} ke liye pehle uski API key daalo.`);
+    $("#set-provider").value = brain;
+    showProviderFields();
+    return;
+  }
+  settings.provider = brain;
+  saveSettings();
+  renderSidebar();
+  toast(`🤖 ${BRAIN_NAMES[brain]} · ${activeModel()}`);
+};
+document.querySelectorAll(".mode-link").forEach(
   (b) =>
-    (b.onclick = () => {
-      settings.mode = b.dataset.mode;
-      saveSettings();
-      updateModeUI();
-      modeMenu.hidden = true;
-      toast(`${MODES[mode()].label} mode · ${activeModel()}`);
+    (b.onclick = async () => {
+      setMode(b.dataset.mode, true);
+      await openChat(null);
+      toast(`${MODES[mode()].label} mode: ${MODES[mode()].desc}`);
+      input.focus();
     }),
 );
 $("#model-pick").onchange = (e) => {

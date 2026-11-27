@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <meta name="color-scheme" content="dark" />
   <meta name="theme-color" content="#050a18" />
-  <title>Project S – Free Hinglish AI for Students</title>
+  <title>Project S – Think. Learn. Create. Grow. | Free Hinglish AI</title>
   <meta name="description" content="Project S by Shivanshu Sharma: a free AI tutor for students that replies in Hinglish. Maths, physics, chemistry, biology, coding, JEE and NEET help, photo questions and voice typing. 100% free with a Google account. Your key and chats stay in your own browser." />
   <meta name="keywords" content="free AI for students, Hinglish AI, AI tutor, maths solver, JEE, NEET, Project S, Shivanshu Sharma" />
   <meta name="author" content="Shivanshu Sharma" />
@@ -50,24 +50,36 @@
 
   <aside id="sidebar">
     <div class="side-head">
-      <div class="brand"><span class="logo" aria-hidden="true"></span><span id="brand-name">S</span></div>
+      <div class="brand"><span class="logo" aria-hidden="true"></span><span><span id="brand-name">Project S</span><small class="tagline">Think. Learn. Create. Grow.</small></span></div>
+      <button id="collapse-side" class="icon-btn only-desktop" aria-label="Hide sidebar" title="Hide sidebar">⇤</button>
       <button id="close-side" class="icon-btn only-mobile" aria-label="Close menu">✕</button>
     </div>
     <button id="new-chat" class="new-chat">＋ New chat</button>
     <nav class="side-nav" aria-label="Menu">
-      <button type="button" class="nav-item active" id="nav-history">🕘 History</button>
+      <button type="button" class="nav-item active" id="nav-history">🕘 Chat history</button>
       <button type="button" class="nav-item" id="nav-library">📚 Library</button>
-      <button type="button" class="nav-item" id="open-settings">⚙ Settings</button>
     </nav>
-    <input id="chat-search" type="search" placeholder="Search chats…" autocomplete="off" />
+    <p class="side-label">Modes</p>
+    <nav class="side-modes" aria-label="Modes">
+      <button type="button" class="nav-item mode-link" data-mode="study">📚 Study</button>
+      <button type="button" class="nav-item mode-link" data-mode="coding">💻 Coding</button>
+      <button type="button" class="nav-item mode-link" data-mode="maths">🧮 Maths</button>
+      <button type="button" class="nav-item mode-link" data-mode="research">🔎 Research</button>
+      <button type="button" class="nav-item mode-link" data-mode="writing">✍️ Writing</button>
+    </nav>
+    <input id="chat-search" type="search" placeholder="🔍 Search conversations…" autocomplete="off" aria-label="Search conversations" />
     <nav id="chat-list" aria-label="Conversations"></nav>
+    <nav class="side-nav side-bottom" aria-label="More">
+      <button type="button" class="nav-item" id="open-settings">⚙ Settings</button>
+      <button type="button" class="nav-item open-about">ℹ️ About Project S</button>
+    </nav>
     <div class="side-foot"><span id="model-info"></span><br /><button type="button" class="link-btn open-guide">📖 Free key guide</button> · <button type="button" class="link-btn open-privacy">🔒 Privacy</button></div>
   </aside>
   <div id="scrim" class="only-mobile"></div>
 
   <main>
     <header class="top">
-      <button id="open-side" class="icon-btn only-mobile" aria-label="Open menu">☰</button>
+      <button id="open-side" class="icon-btn" aria-label="Open menu">☰</button>
       <h1 id="chat-title">New chat</h1>
       <div class="subj-wrap">
         <button id="subject-btn" type="button" class="subj-btn" aria-haspopup="true" title="Theme">💬</button>
@@ -77,13 +89,17 @@
         <button id="mode-btn" type="button" class="mode-btn" aria-haspopup="true">⚡ Fast ▾</button>
         <div id="mode-menu" hidden>
           <p class="menu-label">Mode</p>
-          <button type="button" class="mode-opt" data-mode="fast"><b>⚡ Fast</b><span>Jaldi aur chhota jawab</span></button>
-          <button type="button" class="mode-opt" data-mode="reasoning"><b>🧠 Reasoning</b><span>Mushkil sawaal, dhyaan se soch ke</span></button>
-          <button type="button" class="mode-opt" data-mode="coding"><b>💻 Coding</b><span>Poora chalne wala code, samjha ke</span></button>
-          <button type="button" class="mode-opt" data-mode="study"><b>📚 Study</b><span>Tutor: hints, quiz, flashcards, revision</span></button>
+          <div id="mode-list"></div>
+          <div id="mode-extra"></div>
+          <label class="menu-label" for="brain-pick">AI provider</label>
+          <select id="brain-pick">
+            <option value="gemini">Google Gemini (free)</option>
+            <option value="openrouter">OpenRouter (free)</option>
+            <option value="claude">Claude (paid)</option>
+          </select>
           <label class="menu-label" for="model-pick">Model</label>
           <select id="model-pick"></select>
-          <p class="menu-note">Agar koi model fail ho, S apne aap doosra try karta hai.</p>
+          <p class="menu-note">Agar koi model fail ho, S apne aap doosra try karta hai (sirf wahi jinki key tumne daali hai).</p>
         </div>
       </div>
     </header>
@@ -91,7 +107,20 @@
     <section id="library" hidden aria-labelledby="lib-title">
       <div class="lib-head">
         <h2 id="lib-title">📚 Library</h2>
-        <p>Tumhari saari uploaded photos, PDFs aur notes. Kisi bhi file ka summary banao ya usse sawaal poocho.</p>
+        <p>Tumhari files, ⭐ saved answers aur notes, sab ek jagah.</p>
+      </div>
+      <div class="lib-tools">
+        <div class="lib-tabs" role="tablist">
+          <button type="button" class="lib-tab active" data-tab="files" role="tab">📁 Files</button>
+          <button type="button" class="lib-tab" data-tab="saved" role="tab">⭐ Saved answers</button>
+          <button type="button" class="lib-tab" data-tab="notes" role="tab">📝 Notes</button>
+        </div>
+        <div class="lib-row">
+          <input id="lib-search" type="search" placeholder="🔍 Library mein dhoondo…" aria-label="Search the Library" />
+          <button type="button" id="lib-new-note" class="btn small-btn" hidden>＋ New note</button>
+          <button type="button" id="lib-export" class="btn small-btn" hidden>⬇ Export</button>
+        </div>
+        <p class="small lib-note">Library sirf isi browser mein save hoti hai (cloud sync nahi). Backup ke liye ⚙ Settings → Backup download.</p>
       </div>
       <div id="lib-list"></div>
     </section>
@@ -107,6 +136,7 @@
             <div class="lens"></div>
           </div>
         </div>
+        <p class="welcome-kicker">Project S · <span>Think. Learn. Create. Grow.</span></p>
         <h2>Hi, I'm S. Kuch bhi poocho.</h2>
         <p class="sub">Maths, science, history, coding… ya photo bhejo, main solve kar dunga.</p>
         <div class="suggestions">
@@ -118,6 +148,8 @@
       </div>
     </section>
 
+    <button type="button" id="to-bottom" class="to-bottom" aria-label="Scroll to the latest message" hidden>↓</button>
+    <div id="voice-pill" class="voice-pill" role="status" aria-live="polite" hidden><span class="vp-dot"></span><span id="vp-text">Sun raha hoon…</span><button type="button" id="vp-stop" class="link-btn">✕ Band karo</button></div>
     <div id="chips">
       <button type="button" id="web-toggle" class="chip-btn" aria-pressed="true">🌐 Web search: On</button>
       <span id="doc-chips" hidden>
@@ -125,6 +157,7 @@
         <button type="button" class="chip-btn doc-act" data-q="Is file ke important points aur definitions list karo.">🔑 Key points</button>
         <button type="button" class="chip-btn doc-act" data-q="Is file se mere liye 5 practice questions banao, answers ke saath.">❓ Quiz me</button>
         <button type="button" class="chip-btn doc-act" data-q="Is photo/file mein jo hai use step by step aasaan bhasha mein samjhao.">🔍 Explain</button>
+        <button type="button" class="chip-btn doc-act" data-q="Is file se revision ke liye study notes banao: headings, short points, important formulas/definitions, aur end mein 5 quick questions.">📒 Study notes</button>
       </span>
     </div>
     <div id="tray" hidden></div>
@@ -134,26 +167,32 @@
         <div id="plus-menu" hidden>
           <button type="button" id="pick-camera">📷 Camera</button>
           <button type="button" id="pick-photos">🖼️ Photos</button>
-          <button type="button" id="pick-file">📎 File (PDF, text)</button>
+          <button type="button" id="pick-file">📎 File (PDF, Word, TXT)</button>
         </div>
       </div>
       <textarea id="input" rows="1" placeholder="Message S…" autocomplete="off"></textarea>
-      <button id="mic" type="button" class="round" aria-label="Voice typing">🎤</button>
+      <button id="mic" type="button" class="round" aria-label="Voice typing" title="Voice typing">🎤</button>
+      <button id="voice-mode" type="button" class="round" aria-label="Voice conversation" title="Voice conversation: bolo aur suno">🗣</button>
       <button id="send" type="submit" aria-label="Send">➤</button>
       <button id="stop" type="button" aria-label="Stop" hidden>■</button>
       <input id="file-camera" type="file" accept="image/*" capture="environment" hidden />
       <input id="file-photos" type="file" accept="image/*" multiple hidden />
-      <input id="file-any" type="file" accept="image/*,application/pdf,text/*,.txt,.md,.csv,.json,.py,.js,.html,.css" multiple hidden />
+      <input id="file-any" type="file" accept="image/*,application/pdf,text/*,.txt,.md,.csv,.json,.py,.js,.html,.css,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden />
     </form>
-    <p class="hint">Enter to send · Shift+Enter for a new line · 🎤 to talk · ＋ for photos, PDFs & notes</p>
+    <p class="hint">Enter to send · Shift+Enter for a new line · 🎤 voice typing · 🗣 voice chat · ＋ photos, PDF, Word</p>
   </main>
 
   <dialog id="settings">
     <form id="settings-form" method="dialog">
       <h2><span class="logo" aria-hidden="true"></span>Settings</h2>
       <p id="set-note" class="note" hidden></p>
+      <nav class="set-tabs" aria-label="Settings sections">
+        <a href="#sec-ai">🤖 AI</a><a href="#sec-look">🎨 Look</a><a href="#sec-me">👤 Personal</a><a href="#sec-voice">🔊 Voice</a><a href="#sec-mem">🧠 Memory</a><a href="#sec-privacy">🔒 Privacy</a><a href="#sec-about">ℹ️ About</a>
+      </nav>
 
-      <label for="set-provider">Brain</label>
+      <section id="sec-ai" class="set-sec">
+      <h3>🤖 AI models &amp; API keys</h3>
+      <label for="set-provider">Brain (AI provider)</label>
       <select id="set-provider">
         <option value="gemini">Google Gemini (free)</option>
         <option value="openrouter">OpenRouter (free backup)</option>
@@ -166,6 +205,7 @@
           <input id="set-gkey" type="password" placeholder="AIza..." autocomplete="off" spellcheck="false" />
           <button type="button" class="toggle-key">Show</button>
         </div>
+        <div class="key-tools"><button type="button" class="btn small-btn test-key">🔌 Test key</button><button type="button" class="btn small-btn remove-key">🗑 Remove key</button><span class="key-status" role="status"></span></div>
         <p class="small">Free key: open <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>, sign in with Google, tap <b>Create API key</b>, copy it and paste it here. <button type="button" class="link-btn open-guide">📖 Free key kaise banaye? (1-minute guide)</button></p>
         <label for="set-gmodel">Gemini model</label>
         <select id="set-gmodel">
@@ -182,6 +222,7 @@
           <input id="set-okey" type="password" placeholder="sk-or-..." autocomplete="off" spellcheck="false" />
           <button type="button" class="toggle-key">Show</button>
         </div>
+        <div class="key-tools"><button type="button" class="btn small-btn test-key">🔌 Test key</button><button type="button" class="btn small-btn remove-key">🗑 Remove key</button><span class="key-status" role="status"></span></div>
         <p class="small">Free key: open <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>, sign in with Google, tap <b>Create API Key</b>, copy it and paste it here. S uses OpenRouter's free models automatically. For photos and PDFs, Gemini works best.</p>
       </div>
 
@@ -191,6 +232,7 @@
           <input id="set-key" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" />
           <button type="button" class="toggle-key">Show</button>
         </div>
+        <div class="key-tools"><button type="button" class="btn small-btn test-key">🔌 Test key</button><button type="button" class="btn small-btn remove-key">🗑 Remove key</button><span class="key-status" role="status"></span></div>
         <p class="small">Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> (needs credit under Billing).</p>
         <label for="set-model">Claude model</label>
         <select id="set-model">
@@ -208,42 +250,121 @@
           <option value="max">Max (deepest, slowest)</option>
         </select>
       </div>
+      
       <label class="check"><input id="set-web" type="checkbox" /> 🌐 Web search (sources ke saath)</label>
-      <p class="small">Gemini: Google Search (agar tumhari free key pe chale), warna Wikipedia + website reader. Claude: Claude ka apna web search. Ye switch chat box ke upar 🌐 button jaisa hi hai.</p>
-      <p class="small">🔒 Keys are saved only in this browser on this device. They never come to us. <button type="button" class="link-btn open-privacy">Privacy</button></p>
+      <p class="small">Gemini: Google Search agar tumhari key pe allowed ho (free keys pe aksar nahi hota), warna Wikipedia + website reader. Claude: Claude ka apna web search. 🔎 Research mode mein search hamesha on rehta hai.</p>
+      <label class="check"><input id="set-sympy" type="checkbox" /> 🧮 Maths engine (SymPy) + graphs</label>
+      <p class="small">S hard maths SymPy se exact solve karta hai aur graph banata hai, tumhare browser ke andar. Pehli baar ek hi baar (about 15 MB) download hota hai. Gemini aur Claude ke saath chalta hai.</p>
+      </section>
 
-      <label class="check"><input id="set-sympy" type="checkbox" /> 🧮 Maths engine (SymPy)</label>
-      <p class="small">S solves hard maths exactly with SymPy, running inside your browser. It downloads once (about 15 MB) the first time it's needed. Works with Gemini and Claude.</p>
+      <section id="sec-look" class="set-sec">
+      <h3>🎨 Appearance</h3>
+      <label class="check"><input id="set-themes" type="checkbox" /> Har subject ki chat ka apna rang</label>
+      <p class="small">Off karoge to har chat normal blue rahegi.</p>
+      </section>
 
-      <label class="check"><input id="set-memory" type="checkbox" /> 🧠 Memory (S yaad rakhe tumhare baare mein)</label>
-      <p class="small">S sirf wahi yaad rakhta hai jo tum batate ho (jaise class, exam, naam). Ye bhi sirf isi browser mein save hota hai.</p>
+      <section id="sec-me" class="set-sec">
+      <h3>👤 Personalization</h3>
+      <div class="two-col">
+        <div><label for="set-language">Jawab ki language</label>
+        <select id="set-language"><option value="auto">Auto (jis language mein poocho)</option><option value="hinglish">Hinglish</option><option value="hindi">हिंदी</option><option value="english">English</option></select></div>
+        <div><label for="set-style">Jawab ka style</label>
+        <select id="set-style"><option value="concise">Concise (chhota)</option><option value="balanced">Balanced</option><option value="detailed">Detailed (poora)</option><option value="beginner">Beginner-friendly</option></select></div>
+        <div><label for="set-level">Study level</label>
+        <select id="set-level"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></div>
+        <div><label for="set-wstyle">Writing style</label>
+        <select id="set-wstyle"><option value="simple">Simple</option><option value="professional">Professional</option><option value="academic">Academic</option><option value="casual">Casual</option><option value="concise">Concise</option><option value="detailed">Detailed</option></select></div>
+      </div>
+      <label for="set-personality">Extra instructions (optional)</label>
+      <textarea id="set-personality" placeholder="e.g. Talk to me like a friend. I'm in class 12, PCM."></textarea>
+      </section>
+
+      <section id="sec-voice" class="set-sec">
+      <h3>🔊 Voice</h3>
+      <div class="two-col">
+        <div><label for="set-voice">Mic language</label>
+        <select id="set-voice">
+          <option value="en-IN">English / Hinglish (India)</option>
+          <option value="hi-IN">हिंदी (Hindi)</option>
+          <option value="en-US">English (US)</option>
+        </select></div>
+        <div><label for="set-voicename">S ki awaaz</label>
+        <select id="set-voicename"><option value="">Auto</option></select></div>
+      </div>
+      <label for="set-rate">Bolne ki speed: <span id="rate-val">1.0×</span></label>
+      <input id="set-rate" type="range" min="0.6" max="1.6" step="0.1" />
+      <button type="button" id="test-voice" class="btn small-btn">▶ Awaaz suno</button>
+      <p class="small">Mic sirf tab chalta hai jab tum 🎤 ya 🗣 dabate ho. Awaazein tumhare phone/browser ki hoti hain.</p>
+      </section>
+
+      <section id="sec-mem" class="set-sec">
+      <h3>🧠 Memory</h3>
+      <label class="check"><input id="set-memory" type="checkbox" /> Memory on (S yaad rakhe tumhare baare mein)</label>
+      <p class="small">Memory chat history se alag hai: ye chhoti baatein hain (class, exam, pasand) jo S har chat mein yaad rakhta hai. Ye sirf isi browser mein save hoti hai, doosre phone pe sync nahi hoti. Password, phone number jaisi private cheezein S save nahi karta.</p>
       <div id="memory-list" class="memory-list"></div>
+      <div class="mem-add"><input id="mem-new" type="text" placeholder="Khud add karo, e.g. Mujhe Hinglish mein samjhao" maxlength="300" /><button type="button" id="mem-add" class="btn small-btn">＋ Add</button></div>
+      </section>
 
+      <section id="sec-privacy" class="set-sec">
+      <h3>🔒 Privacy, security &amp; storage</h3>
+      <p class="small">🔑 Tumhari API keys sirf isi browser mein (localStorage) save hoti hain. Hamara koi server nahi hai. Par dhyaan rakho: browser storage poori tarah "secure" nahi hota. Is phone ko use karne wala ya koi bura browser extension key dekh sakta hai. Isliye: key kisi ko mat do, GitHub pe mat daalo, aur Google AI Studio mein key ko sirf "Generative Language API" tak restrict kar do. Key leak ho jaye to delete karke nayi bana lo. <button type="button" class="link-btn open-privacy">Privacy note</button></p>
+      <p class="small" id="storage-info">Storage: checking…</p>
       <label>Chat backup</label>
       <div class="backup-row">
         <button type="button" id="export-chats" class="btn">💾 Backup download</button>
         <button type="button" id="import-chats" class="btn">📂 Backup restore</button>
         <input id="import-file" type="file" accept="application/json,.json" hidden />
       </div>
-      <p class="small">Naye phone pe chats le jaane ke liye. Backup mein API key nahi hoti.</p>
+      <p class="small">Naye phone pe chats, memory aur Library le jaane ke liye. Backup mein API key nahi hoti.</p>
+      <button type="button" id="clear-all" class="btn danger">🗑 Delete all chats</button>
+      </section>
 
-      <label for="set-voice">Mic language</label>
-      <select id="set-voice">
-        <option value="en-IN">English / Hinglish (India)</option>
-        <option value="hi-IN">हिंदी (Hindi)</option>
-        <option value="en-US">English (US)</option>
-      </select>
+      <section id="sec-about" class="set-sec">
+      <h3>ℹ️ About</h3>
+      <p class="small">Project S v2.0 · Created by Shivanshu Sharma. <button type="button" class="link-btn open-about">About Project S</button> · <button type="button" class="link-btn open-guide">📖 Free key guide</button></p>
+      </section>
 
-      <label for="set-personality">Personality (optional)</label>
-      <textarea id="set-personality" placeholder="e.g. Talk to me like a friend, in Hinglish. I'm in class 12, PCM."></textarea>
-
-      <div class="dialog-actions">
-        <button type="button" id="clear-all" class="btn danger">Delete all chats</button>
+      <div class="dialog-actions sticky-actions">
         <div class="right">
           <button value="cancel" class="btn" formnovalidate>Cancel</button>
           <button value="save" class="btn primary">Save</button>
         </div>
       </div>
+    </form>
+  </dialog>
+  <dialog id="about" aria-labelledby="about-title">
+    <div class="about">
+      <button type="button" class="icon-btn about-x" aria-label="Close">✕</button>
+      <div class="about-logo"><span class="logo big" aria-hidden="true"></span></div>
+      <h2 id="about-title">Project S</h2>
+      <p class="about-tag">Think. Learn. Create. Grow.</p>
+      <p class="about-ver">Version 2.0</p>
+      <p>Project S ek personal AI assistant aur tutor hai jo Hindi, Hinglish aur English mein baat karta hai. Ye ek hi web page hai: koi install nahi, koi server nahi.</p>
+      <h3>Kya kya kar sakta hai</h3>
+      <ul>
+        <li>💬 Baat-cheet, padhai, maths, coding, writing aur research</li>
+        <li>🧮 SymPy maths engine: exact answers aur graphs</li>
+        <li>🌐 Web search, source links ke saath</li>
+        <li>📷 Photos, 📄 PDF, Word, TXT aur Markdown samajhna</li>
+        <li>🎤 Voice typing, 🔊 jawab bol ke sunana, 🗣 voice chat</li>
+        <li>📚 Study mode: quiz, flashcards, notes · 🧠 Memory · ⭐ Library</li>
+      </ul>
+      <h3>AI providers</h3>
+      <p>Google Gemini (free key), OpenRouter (free models) aur Anthropic Claude (paid). Tum apni key daalte ho; S seedha usi provider se baat karta hai.</p>
+      <h3>Privacy</h3>
+      <p>Chats, memory, Library aur keys sirf tumhare browser mein rehte hain. Hum koi data store nahi karte. Sawaal jawab banane ke liye sirf tumhare chune hue AI provider ke paas jaata hai.</p>
+      <p class="about-by">Created by <b>Shivanshu Sharma</b></p>
+      <p class="small"><a href="https://github.com/17Shivanshusharma/Project-S" target="_blank" rel="noopener">Source code on GitHub</a></p>
+    </div>
+  </dialog>
+  <dialog id="note-dlg" aria-labelledby="note-dlg-title">
+    <form method="dialog" class="note-form">
+      <h2 id="note-dlg-title">📝 Note</h2>
+      <label for="note-title">Title</label>
+      <input id="note-title" type="text" maxlength="120" />
+      <label for="note-body">Note</label>
+      <textarea id="note-body" rows="10"></textarea>
+      <div class="dialog-actions"><div class="right"><button value="cancel" class="btn" formnovalidate>Cancel</button><button value="save" class="btn primary">Save</button></div></div>
     </form>
   </dialog>
   <dialog id="guide" aria-labelledby="guide-title">

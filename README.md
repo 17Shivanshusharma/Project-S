@@ -1,6 +1,6 @@
-# 🌌 Project S – Free Hinglish AI for Students
+# 🌌 Project S – Think. Learn. Create. Grow.
 
-**A personal AI in a single HTML file, by Shivanshu Sharma.**
+**A free personal AI assistant and tutor in a single HTML file, by Shivanshu Sharma.** Hindi, Hinglish and English.
 
 ### 👉 Try it now: **[17shivanshusharma.github.io/Project-S](https://17shivanshusharma.github.io/Project-S/)**
 
@@ -12,13 +12,34 @@ S is a space-themed AI chat app that runs entirely in your browser. There is not
 
 [![Project S explainer video: click to watch](media/preview.gif)](https://17shivanshusharma.github.io/Project-S/media/project-s-explainer.mp4)
 
-**[▶ Watch the full video (about 1¾ minutes)](https://17shivanshusharma.github.io/Project-S/media/project-s-explainer.mp4)**: what S can do, how every subject gets its own colour, how S explains any question in easy language, the new study mode, memory and web search, how to make your free key, and why your data stays with you.
+**[▶ Watch the full video (about 2 minutes)](https://17shivanshusharma.github.io/Project-S/media/project-s-explainer.mp4)**: what S can do, how every subject gets its own colour, how S explains any question in easy language, the new study mode, memory and web search, how to make your free key, and why your data stays with you.
 
 ![S intro](screenshots/intro.png)
 
 ## ✨ Features
 
-**New in v4**
+### 🚀 New in V2
+
+![Project S V2 on a laptop](screenshots/desktop.png)
+
+- **8 modes:** 💬 Normal, ⚡ Fast, 🧠 Reasoning, 💻 Coding, 📚 Study, 🧮 Maths, 🔎 Research and ✍️ Writing. Pick one from the top bar or the sidebar. Study mode has Beginner / Intermediate / Advanced levels; Writing mode has Professional, Simple, Academic, Casual, Concise and Detailed styles and a language choice.
+- **Better chat:** ↻ Regenerate the last answer, ✏️ edit an earlier question and ask again, ↻ Retry after an error, ⭐ save any answer to the Library, a ↓ button to jump to the newest message, and clear error messages.
+- **Code colours:** code blocks show the language name and are coloured (Python, JavaScript, HTML, CSS, Java, C, C++, SQL and more), with a Copy button. S doesn't run your code on your device.
+- **📈 Maths graphs:** in Maths mode S can draw graphs of functions. The points are calculated by the real SymPy engine, not guessed. S only says "Checked with SymPy" when SymPy actually ran.
+- **📘 Word files:** besides photos, PDF, TXT and Markdown, S now reads Word (.docx) files. Very long documents are split into parts, and S sends the parts that match your question. New 📒 Study notes button for any file.
+- **🗣 Voice chat:** tap 🗣, speak, and S answers out loud, then listens again. A pill shows when the mic is on. In Settings you can pick S's voice and speaking speed. 🔊 Suno now has Pause, Resume and Stop. The mic only turns on when you tap it.
+- **Sidebar:** chats grouped by date (Today, Yesterday, Previous 7 days…), 📌 pin important chats, rename, delete, search, mode shortcuts, ℹ️ About page. On a laptop you can hide the sidebar.
+- **📚 Library with three tabs:** 📁 Files, ⭐ Saved answers and 📝 Notes (write your own notes, with maths). Search, rename, delete and export as Markdown.
+- **🧠 Memory you control:** turn it off, see it, edit it, delete it, or add things yourself.
+- **Personalization:** reply language (Auto, Hinglish, Hindi, English), answer style (Concise, Balanced, Detailed, Beginner-friendly), study level and writing style.
+- **Settings in sections:** AI, Look, Personal, Voice, Memory, Privacy and About. 🔌 Test key checks that your key works, 🗑 Remove key deletes it from the browser, and Storage shows how much space S uses. Backups now include your Library too.
+- **Works on every screen:** phones (Android and iPhone), tablets, laptops and desktops.
+
+| Maths graph | Library | Settings |
+|---|---|---|
+| ![Graph drawn with SymPy](screenshots/graph.png) | ![Library](screenshots/library.png) | ![Settings](screenshots/settings.png) |
+
+### Earlier: v4
 
 - **🎨 Every subject gets its own colour:** S notices the subject of a chat (maths, physics, chemistry, biology, history, geography, English/Hindi, coding, commerce) and gives *only that chat* its own theme. Maths is indigo, biology green, history amber, coding orange, and so on. A new chat starts in the normal blue. Tap the round badge at the top to pick a different subject yourself.
 - **📚 Study mode:** S becomes a tutor. It gives hints one at a time, asks you questions, and makes quizzes, flashcards and revision sheets.
@@ -82,6 +103,7 @@ S explains every answer in simple words, one small step at a time: what the ques
 | 3 | Web search + citations + memory | ✅ Done: web search, numbered sources, verified facts vs guesses, 🧠 memory |
 | 4 | Study mode + coding mode + maths | ✅ Done: 📚 Study, 💻 Coding, 🧠 Reasoning, SymPy maths engine |
 | 5 | Premium UI + mobile optimisation | ✅ Done: subject themes, navy + blue design, Android and iPhone polish |
+| V2 | Full upgrade: 8 modes, graphs, voice chat, Library, personalization | ✅ Done (see "New in V2") |
 | 6 | Backend + authentication + deployment | 🔜 Next. Today S has no server on purpose, so nobody can see your data. A login and cloud sync need a backend account (for example Firebase or Supabase, both have free plans) owned by the project. Deployment is already done with GitHub Pages. |
 
 ## 🚀 How to use
@@ -126,8 +148,14 @@ S shows this same guide on the first screen. You can open it again anytime from 
 ## 🛡️ Security
 
 - **No API key is included in this project.** Every user adds their own key in Settings.
-- Your key is saved only in your browser's local storage on your device.
-- **Never commit your API key to GitHub.** If a key ever leaks, delete it and create a new one.
+- Your key is saved only in your browser's local storage on your device, and S sends it only to the provider it belongs to.
+- **Be honest about the limits:** browser storage is not a safe. Anyone who uses your phone, or a harmful browser extension, could read the key. Hiding it with "Show/Hide" doesn't protect it. So:
+  - Never share your key and **never commit it to GitHub**.
+  - In Google AI Studio / Google Cloud, restrict the key to the "Generative Language API" only.
+  - If a key leaks, delete it and create a new one. In S use ⚙ Settings → 🗑 Remove key.
+- The page has a Content Security Policy, so it can only talk to the AI providers, the maths engine download (jsDelivr), Wikipedia and the page reader (r.jina.ai).
+- Backups never contain your keys.
+- A server that keeps one shared key safely (with rate limits and logins) is possible, but it needs a backend account. GitHub Pages can only host static files, so that is Phase 6.
 
 ## 💻 S in many programming languages
 
@@ -161,15 +189,18 @@ npm run build      # writes out/S.html
 
 - `src/app.js`: chat logic, the providers (Gemini, OpenRouter, Claude), attachments, mic and storage
 - `src/sympy.js`: the SymPy maths engine (Pyodide in a Web Worker)
+- `src/docx.js`: reads Word (.docx) files in the browser (no library)
+- `src/graph.js`: draws SymPy graphs as SVG
 - `src/subjects.js`: the subject detector and the colour theme for each subject
 - `src/search.js`: web search (Google Search via your Gemini key when allowed, otherwise Wikipedia + a free page reader)
 - `src/space.js`: the 3D starfield
 - `src/intro.js`: the black hole intro animation
 - `src/style.css` and `src/template.html`: the look and the layout
 - `video/`: the explainer video (`video.html` is the animation, `render.cjs` turns it into frames for ffmpeg)
+- `../docs/V2-REPORT.md`: what V2 added, what was tested, and what still needs a backend
 - `build.cjs`: bundles everything, including the KaTeX maths fonts, into one HTML file
 
-Built with [marked](https://github.com/markedjs/marked), [DOMPurify](https://github.com/cure53/DOMPurify), [KaTeX](https://katex.org) and the [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-typescript).
+Built with [highlight.js](https://highlightjs.org), [marked](https://github.com/markedjs/marked), [DOMPurify](https://github.com/cure53/DOMPurify), [KaTeX](https://katex.org) and the [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-typescript).
 
 ---
 

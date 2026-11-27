@@ -16,6 +16,7 @@ def __s_run(src):
     import sympy
     g = {"__name__": "__main__"}
     exec("from sympy import *\\nx, y, z, t, a, b, c, k, m, n = symbols('x y z t a b c k m n')", g)
+    g["__s_plot"] = __s_plot
     buf = io.StringIO()
     old = sys.stdout, sys.stderr
     sys.stdout = sys.stderr = buf
@@ -35,9 +36,35 @@ def __s_run(src):
     finally:
         sys.stdout, sys.stderr = old
     out = buf.getvalue().strip()
-    if len(out) > 8000:
+    if len(out) > 8000 and not out.startswith('[{"label"'):
         out = out[:4000] + "\\n... (output shortened) ...\\n" + out[-3000:]
     return out or "(no output: use print() to show results)"
+
+def __s_plot(spec):
+    import json, math
+    from sympy import sympify, lambdify, Symbol
+    sp = json.loads(spec)
+    x = Symbol("x")
+    lo, hi = float(sp.get("xmin", -10)), float(sp.get("xmax", 10))
+    if not hi > lo:
+        lo, hi = -10.0, 10.0
+    out = []
+    for e in list(sp.get("expressions", []))[:4]:
+        src = str(e).replace("^", "**")
+        if "=" in src:
+            src = src.split("=", 1)[1]
+        ex = sympify(src, locals={"x": x})
+        f = lambdify(x, ex, "math")
+        pts = []
+        for i in range(301):
+            xv = lo + (hi - lo) * i / 300
+            try:
+                yv = float(f(xv))
+                pts.append([round(xv, 5), round(yv, 5)] if math.isfinite(yv) and abs(yv) < 1e6 else None)
+            except Exception:
+                pts.append(None)
+        out.append({"label": str(e), "points": pts})
+    return json.dumps(out)
 `;
 
 const WORKER_SOURCE = `
@@ -163,3 +190,30 @@ export const SYMPY_TOOL = {
     required: ["code"],
   },
 };
+
+// Graphs: SymPy samples the functions, the app draws them as a small SVG chart.
+export const PLOT_TOOL = {
+  name: "plot_graph",
+  description:
+    "Draw a graph of up to 4 functions of x for the user (shown under your answer). Use it when a picture helps: functions, roots, intersections, trigonometry, growth. Expressions use SymPy syntax, e.g. 'x**2 - 5*x + 6', 'sin(x)', 'exp(-x)'.",
+  parameters: {
+    type: "object",
+    properties: {
+      expressions: { type: "array", items: { type: "string" }, description: "Functions of x, e.g. ['x**2 - 4', '2*x + 1']" },
+      xmin: { type: "number", description: "Left end of the x-axis (default -10)" },
+      xmax: { type: "number", description: "Right end of the x-axis (default 10)" },
+      title: { type: "string", description: "Short title for the graph" },
+    },
+    required: ["expressions"],
+  },
+};
+export async function runPlot(args, signal) {
+  const spec = JSON.stringify({ expressions: (args?.expressions || []).map(String), xmin: args?.xmin ?? -10, xmax: args?.xmax ?? 10 });
+  const out = await runSympy(`__s_plot(${JSON.stringify(spec)})`, signal);
+  if (out.startsWith("Error")) return { error: out };
+  try {
+    return { series: JSON.parse(out) };
+  } catch {
+    return { error: "Error: couldn't read the graph data." };
+  }
+}
