@@ -208,8 +208,8 @@ On an Android phone, the Python version runs in the free **Pydroid 3** app.
 
 ```bash
 cd source
-npm install
-npm run build      # writes out/S.html
+npm ci           # exact versions from package-lock.json, so the build is reproducible
+npm run build      # writes out/S.html, then copy it to ../index.html
 ```
 
 - `src/app.js`: chat logic, the providers (Gemini, OpenRouter, Claude), attachments, mic and storage
@@ -222,9 +222,19 @@ npm run build      # writes out/S.html
 - `src/space.js`: the 3D starfield
 - `src/intro.js`: the black hole intro animation
 - `src/style.css` and `src/template.html`: the look and the layout
+- `src/fx.css` and `src/fx.js`: the v3 design layer (fonts, aurora background, text and hover effects; see below)
 - `video/`: the explainer video (`video.html` is the animation, `render.cjs` turns it into frames for ffmpeg)
 - `../docs/V2-REPORT.md`: what V2 added, what was tested, and what still needs a backend
 - `build.cjs`: bundles everything, including the KaTeX maths fonts, into one HTML file
+
+### 🎨 Design (v3)
+
+The v3 look keeps every feature and every button where it was, and only refines the design:
+
+- **Fonts:** [Inter](https://rsms.me/inter/) for text and [Space Grotesk](https://floriankarsten.github.io/space-grotesk/) for headings (SIL Open Font License), embedded so the file still works offline.
+- **Effects** in plain JavaScript, with ideas from [React Bits](https://reactbits.dev): Aurora background, BlurText headline, RotatingText subject pill, ShinyText tagline, GradientText logo, SpotlightCard suggestions, StarBorder button, a border beam around the message box when you type, Magnet send button and ClickSpark.
+- **Layout ideas** (badge, big display headline, film grain) from modern AI landing pages like the ones on [MotionSites](https://motionsites.ai).
+- **Phones first:** hover effects run only with a mouse, the background has no blur filters, everything rests while you type, and *Reduce motion* turns all motion off.
 
 Built with [highlight.js](https://highlightjs.org), [marked](https://github.com/markedjs/marked), [DOMPurify](https://github.com/cure53/DOMPurify), [KaTeX](https://katex.org) and the [Anthropic SDK](https://github.com/anthropics/anthropic-sdk-typescript).
 

@@ -1,0 +1,235 @@
+/* ==========================================================================
+   v3 redesign layer. Loaded after style.css, so it only refines the look:
+   every id and class the app uses stays the same.
+   Effects inspired by React Bits (reactbits.dev): Aurora, ShinyText,
+   GradientText, BlurText, RotatingText, SpotlightCard, StarBorder, ClickSpark.
+   Layout ideas (badge, big display headline, grain) from modern AI landing
+   pages like the ones on motionsites.ai.
+   ========================================================================== */
+
+/*__FONTS__*/
+
+:root {
+  --font-ui: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Devanagari", sans-serif;
+  --font-display: "Space Grotesk Variable", "Inter Variable", system-ui, sans-serif;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --hairline: linear-gradient(90deg, transparent, rgba(var(--accent-rgb), 0.55), rgba(var(--accent2-rgb), 0.45), transparent);
+}
+
+@property --fx-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+body {
+  font-family: var(--font-ui);
+  font-feature-settings: "cv11", "ss01", "ss03";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3, .brand, .intro-title .t1, .guide-big { font-family: var(--font-display); }
+
+/* ---------- Aurora background (CSS only, no blur filter, cheap on phones) ---------- */
+.aurora { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; opacity: 0.75; }
+.aurora i {
+  position: absolute; width: 70vmax; height: 70vmax; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(var(--accent-rgb), 0.32), rgba(var(--accent-rgb), 0.08) 55%, transparent 72%);
+  animation: fx-drift 26s ease-in-out infinite alternate;
+  will-change: transform;
+}
+.aurora i:nth-child(1) { left: -20vmax; top: -30vmax; }
+.aurora i:nth-child(2) {
+  right: -25vmax; top: -10vmax; animation-duration: 32s; animation-delay: -8s;
+  background: radial-gradient(closest-side, rgba(var(--accent2-rgb), 0.24), rgba(var(--accent2-rgb), 0.06) 55%, transparent 72%);
+}
+.aurora i:nth-child(3) {
+  left: 10vmax; bottom: -45vmax; animation-duration: 38s; animation-delay: -16s;
+  background: radial-gradient(closest-side, rgba(120, 90, 255, 0.16), transparent 70%);
+}
+@keyframes fx-drift {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(8vmax, 6vmax, 0) scale(1.12); }
+  100% { transform: translate3d(-6vmax, 10vmax, 0) scale(0.95); }
+}
+
+/* Film grain on top of everything: gives the dark gradients a printed, premium feel. */
+.grain {
+  position: fixed; inset: 0; z-index: 900; pointer-events: none; opacity: 0.06; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+body.typing .aurora i, body.typing .fx-shiny, body.typing .fx-dot::after { animation-play-state: paused; }
+
+/* ---------- Brand: GradientText that slowly flows ---------- */
+#brand-name {
+  background: linear-gradient(90deg, #ffffff, rgb(var(--accent-rgb)), rgb(var(--accent2-rgb)), #ffffff);
+  background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: fx-flow 8s linear infinite;
+  letter-spacing: -0.01em;
+}
+@keyframes fx-flow { to { background-position: 300% 0; } }
+
+/* ---------- Top bar: hairline glow instead of a flat border ---------- */
+.top { position: relative; border-bottom-color: transparent; }
+.top::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--hairline); opacity: 0.7; }
+.top h1 { font-weight: 600; letter-spacing: -0.01em; }
+
+/* ---------- Sidebar ---------- */
+@media (min-width: 761px) { #sidebar { border-right-color: transparent; position: relative; } }
+#sidebar::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 1px; background: linear-gradient(180deg, transparent, rgba(var(--accent-rgb), 0.45), transparent); }
+.side-label { letter-spacing: 0.14em; }
+.nav-item { transition: background 0.2s, color 0.2s, padding 0.25s var(--ease-out); }
+.nav-item:hover { padding-left: 14px; }
+.chat-item { transition: background 0.2s; }
+
+/* New chat: StarBorder (two lights travel along the edge) */
+.new-chat {
+  position: relative; overflow: hidden; isolation: isolate; border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--violet-2), var(--violet)); letter-spacing: 0.01em;
+}
+.new-chat::before, .new-chat::after {
+  content: ""; position: absolute; z-index: -1; width: 300%; height: 50%; border-radius: 50%; opacity: 0.8;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.9), transparent 12%);
+}
+.new-chat::before { top: -12px; left: -250%; animation: fx-star-top 5s linear infinite alternate; }
+.new-chat::after { bottom: -12px; right: -250%; animation: fx-star-bottom 5s linear infinite alternate; }
+@keyframes fx-star-top { to { transform: translateX(100%); opacity: 0; } }
+@keyframes fx-star-bottom { to { transform: translateX(-100%); opacity: 0; } }
+
+/* ---------- Welcome ---------- */
+.welcome { max-width: 720px; }
+.welcome-kicker {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px;
+  text-transform: none; letter-spacing: 0.02em; font-size: 13px; margin-bottom: 14px;
+}
+.fx-badge {
+  display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 10px; border-radius: 999px;
+  color: var(--text) !important; font-weight: 600; letter-spacing: 0.04em;
+  background: rgba(var(--accent-rgb), 0.12); border: 1px solid rgba(var(--accent-rgb), 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.fx-dot { position: relative; width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--accent2-rgb)); box-shadow: 0 0 10px rgb(var(--accent2-rgb)); }
+.fx-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: inherit; animation: fx-ping 2s var(--ease-out) infinite; }
+@keyframes fx-ping { 75%, 100% { transform: scale(2.6); opacity: 0; } }
+
+/* ShinyText: a light sweeps across the words */
+.fx-shiny {
+  color: transparent !important;
+  background: linear-gradient(110deg, var(--muted) 40%, #ffffff 50%, var(--muted) 60%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  animation: fx-shine 4s linear infinite;
+}
+@keyframes fx-shine { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+
+/* Display headline + BlurText */
+.welcome h2 {
+  font-size: clamp(30px, 5.6vw, 52px); line-height: 1.05; font-weight: 700; letter-spacing: -0.035em;
+  margin: 4px 0 12px;
+  background: linear-gradient(180deg, #ffffff 30%, rgba(213, 228, 255, 0.72));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.welcome h2 .fx-word {
+  display: inline-block;
+  background: inherit; -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.fx .welcome.fx-in h2 .fx-word { animation: fx-blur-in 0.9s var(--ease-out) both; animation-delay: calc(var(--i) * 70ms + 80ms); }
+@keyframes fx-blur-in { from { opacity: 0; filter: blur(12px); transform: translateY(14px); } }
+
+.welcome .sub { font-size: 16.5px; margin-bottom: 26px; }
+
+/* RotatingText pill */
+.fx-rotator {
+  display: inline-flex; overflow: hidden; vertical-align: bottom; padding: 0 10px; margin-right: 2px; border-radius: 8px;
+  color: #ffffff; font-weight: 650;
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.55), rgba(var(--accent2-rgb), 0.35));
+  box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.fx-rot-word { display: inline-block; transition: transform 0.26s var(--ease-out), opacity 0.26s, filter 0.26s; }
+.fx-rot-word.out { transform: translateY(-110%); opacity: 0; filter: blur(4px); }
+.fx-rot-word.in { transform: translateY(110%); opacity: 0; transition: none; }
+
+/* ---------- Suggestion cards: SpotlightCard + staggered entrance ---------- */
+.suggestions { gap: 12px; }
+.suggestions button {
+  position: relative; overflow: hidden; isolation: isolate;
+  border-radius: 18px; padding: 14px 16px;
+  transition: border-color 0.3s, box-shadow 0.3s, transform 0.35s var(--ease-out);
+}
+.suggestions button::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; opacity: 0; transition: opacity 0.3s;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--accent-rgb), 0.28), transparent 65%);
+}
+.suggestions button:hover::before { opacity: 1; }
+.suggestions button:hover { transform: translateY(-3px); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(var(--accent-rgb), 0.35); }
+.suggestions button:active { transform: translateY(0) scale(0.98); }
+.suggestions button b { font-family: var(--font-display); letter-spacing: -0.01em; }
+.fx .welcome.fx-in .suggestions button { animation: fx-up 0.7s var(--ease-out) both; }
+.fx .welcome.fx-in .suggestions button:nth-child(1) { animation-delay: 0.35s; }
+.fx .welcome.fx-in .suggestions button:nth-child(2) { animation-delay: 0.42s; }
+.fx .welcome.fx-in .suggestions button:nth-child(3) { animation-delay: 0.49s; }
+.fx .welcome.fx-in .suggestions button:nth-child(4) { animation-delay: 0.56s; }
+.fx .welcome.fx-in .welcome-kicker, .fx .welcome.fx-in .sub { animation: fx-up 0.7s var(--ease-out) both; }
+.fx .welcome.fx-in .sub { animation-delay: 0.25s; }
+@keyframes fx-up { from { opacity: 0; transform: translateY(16px); } }
+
+/* ---------- Messages ---------- */
+.msg.user .bubble { border-radius: 20px 20px 6px 20px; letter-spacing: 0.005em; }
+.msg.assistant .bubble { border-radius: 6px 20px 20px 20px; line-height: 1.65; }
+.bubble h1, .bubble h2, .bubble h3 { letter-spacing: -0.02em; }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); filter: blur(6px); } }
+
+/* ---------- Composer: border beam on focus ---------- */
+#composer { position: relative; border-radius: 24px; isolation: isolate; }
+#composer::before {
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; z-index: -1; pointer-events: none;
+  background: conic-gradient(from var(--fx-angle), transparent 0 70%, rgb(var(--accent-rgb)) 82%, rgb(var(--accent2-rgb)) 90%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: 0; transition: opacity 0.3s;
+}
+#composer:focus-within::before { opacity: 1; animation: fx-spin-angle 3.5s linear infinite; }
+@keyframes fx-spin-angle { to { --fx-angle: 360deg; } }
+#send { transition: translate 0.25s var(--ease-out), transform 0.2s, box-shadow 0.2s, opacity 0.2s; }
+#send:not(:disabled):hover { transform: scale(1.06); box-shadow: 0 0 26px rgba(var(--accent-rgb), 0.75); }
+#send:not(:disabled):active { transform: scale(0.94); }
+.round { transition: border-color 0.2s, background 0.2s, transform 0.2s; }
+.round:hover { background: rgba(var(--accent-rgb), 0.12); }
+.chip-btn { transition: border-color 0.2s, background 0.2s, transform 0.2s; }
+.chip-btn:hover { background: rgba(var(--accent-rgb), 0.14); }
+
+/* ---------- Menus & dialogs: smoother pop-in ---------- */
+#mode-menu, #subject-menu, #export-menu, #plus-menu { animation: fx-pop 0.22s var(--ease-out); transform-origin: top right; }
+#plus-menu { transform-origin: bottom left; }
+@keyframes fx-pop { from { opacity: 0; transform: scale(0.96) translateY(-4px); } }
+dialog[open] { animation: fx-dialog 0.32s var(--ease-out); }
+@keyframes fx-dialog { from { opacity: 0; transform: translateY(12px) scale(0.98); } }
+
+/* ---------- ClickSpark canvas ---------- */
+.fx-spark { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 1001; pointer-events: none; }
+
+/* ---------- Focus that is visible but not loud (keyboard users) ---------- */
+:focus-visible { outline: 2px solid rgba(var(--accent2-rgb), 0.9); outline-offset: 2px; border-radius: 8px; }
+#input:focus-visible { outline: none; }
+
+/* ---------- Phones ---------- */
+@media (pointer: coarse), (max-width: 760px) {
+  .aurora { opacity: 0.55; }
+  .aurora i { animation-duration: 40s; }
+  .grain { opacity: 0.045; }
+  .suggestions button:hover { transform: none; }
+}
+@media (max-width: 760px) {
+  /* Fix: the top bar (z-index 30) used to show through the open menu on phones. */
+  #sidebar { z-index: 40; }
+  body.side-open #scrim { z-index: 35; }
+  .welcome h2 { font-size: clamp(28px, 8.4vw, 38px); }
+  .welcome .sub { font-size: 15px; margin-bottom: 20px; }
+  .welcome-kicker { margin-bottom: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fx-shiny { color: var(--muted) !important; background: none; }
+}
+@media print { .aurora, .grain, .fx-spark { display: none !important; } }
