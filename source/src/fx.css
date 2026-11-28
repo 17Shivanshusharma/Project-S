@@ -1,0 +1,202 @@
+/* ==========================================================================
+   v3 look: a study notebook at night.
+   Loaded after style.css and only changes the look: every id and class the
+   app uses stays the same.
+
+   The idea, in three parts:
+   - Notebook: faint ruled lines, a red margin, a few handwritten notes.
+   - Calm: flat surfaces, solid 1px borders, one accent colour, no glow.
+   - Space, quietly: the black hole and the stars stay, but dimmer.
+   ========================================================================== */
+
+/*__FONTS__*/
+
+:root {
+  --font-ui: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Devanagari", sans-serif;
+  --font-serif: "Fraunces Variable", Georgia, "Times New Roman", serif;
+  --font-hand: "Caveat Variable", "Segoe Print", "Bradley Hand", cursive;
+
+  /* Paper and ink */
+  --bg: #111317;
+  --paper: #14161b;
+  --surface: #1a1d23;
+  --surface-2: #20242b;
+  --line: #2a2e36;
+  --line-soft: rgba(255, 255, 255, 0.035);
+  --margin-red: rgba(214, 92, 78, 0.38);
+  --text: #ebe7df;
+  --muted: #9a9890;
+  --glass: var(--surface);
+  --glass-strong: var(--surface);
+  --border: var(--line);
+  --border-hi: #3a3f49;
+  --glow: transparent;
+}
+
+body {
+  background: var(--bg);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+h1, h2, h3 { font-family: var(--font-serif); font-optical-sizing: auto; }
+
+/* ---------- Space, quietly ---------- */
+.nebula { display: none; }
+#stars { opacity: 0.28; }
+.logo { box-shadow: none; }
+
+/* Paper grain, very light */
+.grain {
+  position: fixed; inset: 0; z-index: 900; pointer-events: none; opacity: 0.035; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- Sidebar: a plain, solid panel ---------- */
+#sidebar {
+  background: var(--paper); backdrop-filter: none; -webkit-backdrop-filter: none;
+  border-right: 1px solid var(--line); box-shadow: none;
+}
+.brand { font-family: var(--font-serif); font-weight: 600; font-size: 21px; letter-spacing: 0; }
+#brand-name { background: none; color: var(--text); text-shadow: none; -webkit-background-clip: border-box; background-clip: border-box; }
+.tagline { font-family: var(--font-ui); letter-spacing: 0.02em; }
+.new-chat, .new-chat:hover {
+  background: var(--text); color: #15171c; border: 0; border-radius: 10px; box-shadow: none; transform: none; font-weight: 600;
+}
+.new-chat:hover { background: #ffffff; }
+.nav-item { border-radius: 8px; }
+.nav-item:hover, .chat-item:hover { background: var(--surface); }
+.nav-item.active, .chat-item.active, .mode-opt.active, .subj-opt.active {
+  background: var(--surface-2); box-shadow: inset 2px 0 0 var(--violet);
+}
+.side-label { color: var(--muted); letter-spacing: 0.12em; }
+#chat-search, #model-pick, dialog input[type=password], dialog input[type=text], dialog select, dialog textarea {
+  background: var(--bg); border-color: var(--line); border-radius: 8px;
+}
+
+/* ---------- Top bar ---------- */
+.top { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; border-bottom: 1px solid var(--line); }
+.top h1 { font-family: var(--font-ui); font-weight: 600; font-size: 15px; }
+.mode-btn, .subj-btn { background: var(--surface); border-color: var(--line); box-shadow: none; }
+.mode-btn:hover, .subj-btn:hover { border-color: var(--border-hi); }
+
+/* ---------- The page: ruled lines and a red margin ---------- */
+#messages {
+  background-image: repeating-linear-gradient(180deg, transparent 0 31px, var(--line-soft) 31px 32px);
+  background-attachment: local;
+}
+@media (min-width: 761px) {
+  #messages { box-shadow: inset 64px 0 0 -63px var(--margin-red); }
+}
+
+/* ---------- Welcome: left-aligned, like the top of a notebook page ---------- */
+.welcome { max-width: 700px; text-align: left; margin-top: 4vh; }
+/* Same black hole, just smaller and calmer */
+.bh-scene { width: 260px; height: 220px; margin: -10px 0 -92px -40px; transform: scale(0.55); transform-origin: left top; }
+.bh-scene .blackhole .glow { opacity: 0.4; }
+.bh-scene .blackhole .lens { box-shadow: none; }
+
+.welcome-kicker { font-size: 12px; letter-spacing: 0.14em; color: var(--muted); margin: 0 0 10px; }
+.welcome-kicker span { color: var(--muted); }
+.welcome h2 {
+  font-size: clamp(32px, 5.4vw, 50px); line-height: 1.08; font-weight: 500; letter-spacing: -0.02em;
+  margin: 0 0 12px; color: var(--text);
+}
+/* A hand-drawn underline, slightly uneven on purpose */
+.scribble {
+  font-style: italic; white-space: nowrap; padding-bottom: 6px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 14' preserveAspectRatio='none'%3E%3Cpath d='M3 9 C 60 4, 120 11, 180 6 S 270 5, 297 8' fill='none' stroke='%23d65c4e' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E") bottom left / 100% 0.28em no-repeat;
+}
+.welcome .sub { font-size: 16px; color: var(--muted); margin: 0 0 4px; max-width: 34em; }
+.hand-note {
+  font-family: var(--font-hand); font-size: 25px; line-height: 1; color: #8fb3ff;
+  margin: 4px 0 22px 2px; transform: rotate(-2deg); transform-origin: left;
+}
+
+/* Suggestions: index cards, flat, with a coloured top edge on hover */
+.suggestions { gap: 10px; perspective: none; }
+.suggestions button {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none;
+  padding: 13px 15px; transition: border-color 0.15s, background 0.15s;
+}
+.suggestions button:hover {
+  transform: none; box-shadow: inset 0 2px 0 var(--violet); border-color: var(--border-hi); background: var(--surface-2);
+}
+.suggestions button b { font-weight: 600; }
+
+/* ---------- Messages ---------- */
+.msg { animation: none; }
+.msg.user .bubble {
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 14px 14px 4px 14px; box-shadow: none;
+}
+/* S writes straight on the page, like notes in a copy */
+.msg.assistant .bubble {
+  background: none; border: 0; box-shadow: none; padding: 2px 0 0;
+  backdrop-filter: none; -webkit-backdrop-filter: none; line-height: 1.7;
+}
+.bubble h1, .bubble h2, .bubble h3 { color: var(--text); font-weight: 600; letter-spacing: -0.01em; }
+.bubble strong { color: #ffffff; }
+.bubble pre { background: #0c0d10; border-color: var(--line); border-radius: 8px; }
+.bubble :not(pre) > code { background: var(--surface-2); color: var(--text); }
+.bubble th { background: var(--surface); }
+.bubble blockquote { border-left: 2px solid var(--margin-red); }
+.bubble a { color: #8fb3ff; }
+
+/* ---------- Composer ---------- */
+#composer {
+  background: var(--surface); backdrop-filter: none; -webkit-backdrop-filter: none;
+  border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+#composer:focus-within { border-color: var(--border-hi); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.14); }
+.round { background: transparent; border-color: var(--line); }
+.round:hover { background: var(--surface-2); border-color: var(--border-hi); }
+#send, #stop { background: var(--violet); box-shadow: none; }
+#send:not(:disabled):hover { filter: brightness(1.1); }
+.chip-btn { background: var(--surface); border-color: var(--line); box-shadow: none; }
+.chip-btn:hover { border-color: var(--border-hi); }
+#web-toggle[aria-pressed="true"] { background: var(--surface); border-color: var(--line); color: var(--text); }
+.primary-chip { background: var(--violet); }
+.hint { color: #6f6e68; }
+
+/* ---------- Menus and dialogs: solid, normal shadow ---------- */
+#plus-menu, #mode-menu, #subject-menu, #export-menu {
+  background: var(--surface); border-color: var(--line); backdrop-filter: none; -webkit-backdrop-filter: none;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+#plus-menu button:hover, .mode-opt:hover { background: var(--surface-2); }
+dialog { background: var(--paper); border-color: var(--line); border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); }
+dialog h2 { font-weight: 600; }
+.btn { background: var(--surface); border-color: var(--line); border-radius: 8px; }
+.btn.primary { background: var(--violet); box-shadow: none; }
+.guide-big { background: none; color: var(--text); -webkit-background-clip: border-box; background-clip: border-box; font-family: var(--font-serif); font-weight: 500; }
+.sticky-actions { box-shadow: 0 -10px 16px var(--paper); }
+.set-tabs { box-shadow: 0 10px 16px var(--paper); }
+#toast { background: var(--surface-2); border-color: var(--line); }
+
+/* ---------- Intro: same black hole, title in the serif ---------- */
+.intro-title .t1 { font-family: var(--font-serif); font-weight: 600; }
+
+:focus-visible { outline: 2px solid rgba(var(--accent-rgb), 0.8); outline-offset: 2px; }
+#input:focus-visible { outline: none; }
+
+/* ---------- Phones ---------- */
+@media (max-width: 760px) {
+  /* Fix: the top bar (z-index 30) used to show through the open menu on phones. */
+  #sidebar { z-index: 40; background: var(--paper); }
+  body.side-open #scrim { z-index: 35; }
+  .welcome { margin-top: 2vh; }
+  .welcome h2 { font-size: clamp(30px, 8.6vw, 38px); }
+  .hand-note { font-size: 23px; margin-bottom: 18px; }
+  .bh-scene { margin: -10px 0 -100px -12px; transform: scale(0.5); }
+  .msg.assistant .bubble { padding: 2px 0 0; }
+}
+@media (pointer: coarse), (max-width: 760px) {
+  #sidebar { background: var(--paper); }
+  .top { background: var(--bg); }
+  #composer { background: var(--surface); }
+  .msg.assistant .bubble { background: none; }
+  .suggestions button { background: var(--surface); }
+}
+@media print { .grain { display: none !important; } #messages { background: none; box-shadow: none; } }
