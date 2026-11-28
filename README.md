@@ -227,7 +227,7 @@ npm run build      # writes out/S.html, then copy it to ../index.html
 - `../docs/V2-REPORT.md`: what V2 added, what was tested, and what still needs a backend
 - `build.cjs`: bundles everything, including the KaTeX maths fonts, into one HTML file
 
-### 🎨 Design (v3): "raat ki padhai"
+### 🎨 Design (v3)
 
 A study notebook at night. Every feature and button is where it was; only the look changed.
 
