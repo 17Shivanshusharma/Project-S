@@ -6,7 +6,6 @@ import DOMPurify from "dompurify";
 import katex from "katex";
 import { startStarfield } from "./space.js";
 import { playIntro } from "./intro.js";
-import { initFx } from "./fx.js";
 import { runSympy, sympyLoaded, SYMPY_TOOL, PLOT_TOOL, runPlot } from "./sympy.js";
 import hljs from "highlight.js/lib/core";
 import hlPython from "highlight.js/lib/languages/python";
@@ -3351,7 +3350,6 @@ $("#web-toggle").onclick = () => {
 document.querySelectorAll(".doc-act").forEach((b) => (b.onclick = () => send(b.dataset.q)));
 
 stars = startStarfield($("#stars"));
-initFx();
 setBusy(false);
 migrateOldChats()
   .catch(console.error)
